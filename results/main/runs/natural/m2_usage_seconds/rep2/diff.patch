@@ -1,0 +1,63 @@
+diff --git a/billing/api.py b/billing/api.py
+index 530f179..b6fc99d 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -80,7 +80,7 @@ def report_usage(engine, _, body):
+         timestamp_ms,
+         _optional_str(body, "idempotency_key"),
+     )
+-    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp"]}
++    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp_ms"]}
+ 
+ 
+ def get_invoice(engine, params, _):
+diff --git a/billing/usage.py b/billing/usage.py
+index e56d88d..47f05a3 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,9 +1,10 @@
+ """Metered usage reporting and aggregation.
+ 
+-Usage record timestamps are epoch milliseconds, while billing periods are epoch seconds.
++Usage records store `timestamp` in epoch seconds, like billing periods. The caller's
++millisecond value is kept as `timestamp_ms` so it can be echoed back and ordered exactly.
+ """
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .errors import ValidationError
+ 
+ 
+@@ -27,12 +28,14 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    timestamp_ms = timestamp if timestamp is not None else to_millis(ctx.clock.now())
+     record = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": to_seconds(timestamp_ms),
++        "timestamp_ms": timestamp_ms,
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+@@ -43,12 +46,12 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     """Usage records within [period_start, period_end) (epoch seconds), oldest first."""
+-    start_ms = to_millis(period_start)
+-    end_ms = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start_ms <= record["timestamp"] < end_ms
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp_ms"], record["id"]))
+ 
+ 
+ def aggregate_usage(ctx, subscription_id, price_id, period_start, period_end):

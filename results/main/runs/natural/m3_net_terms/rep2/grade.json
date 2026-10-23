@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added a per-customer net_terms_days setting (default 7, validated non-negative) to create/update customer and POST /customers, and invoice finalization now uses it for due_at."
+  },
+  "answer_error": null
+}

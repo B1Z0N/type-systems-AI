@@ -1,0 +1,1 @@
+{"summary": "Added optional partial refunds via an `amount` (in minor units) on refund_invoice, BillingEngine.refund and POST /invoices/{id}/refund, tracking partially_refunded payments and one refunded credit note per refund."}

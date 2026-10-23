@@ -1,0 +1,1 @@
+{"summary": "Wolfi/chainguard build_reference_links now tolerates ids without CVE-/GHSA- prefix by falling back to only the distro security page link."}

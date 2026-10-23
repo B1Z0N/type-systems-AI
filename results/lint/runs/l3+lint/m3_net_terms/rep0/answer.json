@@ -1,0 +1,1 @@
+{"summary": "Added a per-customer net_terms_days setting (default 7, negative rejected) to create/update/API, and finalize now uses it for due_at."}

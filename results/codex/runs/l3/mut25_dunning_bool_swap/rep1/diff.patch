@@ -1,0 +1,40 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 3ef0d16..c9ba953 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -51,7 +51,9 @@ def due_for_retry(ctx: Context, now: EpochSeconds) -> list[InvoiceId]:
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "open" or invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
++        if invoice["status"] == "open"
++        and invoice["next_attempt_at"] is not None
++        and invoice["next_attempt_at"] <= now
+     ]
+     return [invoice["id"] for invoice in sorted(due, key=lambda inv: (inv["next_attempt_at"] or 0, inv["id"]))]
+ 
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..1e0bccb 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,20 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_declined_card_retries_only_on_dunning_schedule(world):
++    customer = world.customer(last4="0002")
++    subscription = world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(customer["id"])
++
++    assert invoice["attempt_count"] == 1
++    assert subscription["status"] == "past_due"
++    for day, expected_attempts in enumerate((1, 2, 2, 3, 3, 3, 3, 4, 4)):
++        if day:
++            world.advance_days(1)
++        world.engine.run_cycle()
++        assert invoice["attempt_count"] == expected_attempts
++        assert len(world.gateway.charges) == expected_attempts
++        assert subscription["status"] == ("unpaid" if day >= 7 else "past_due")
++    assert invoice["next_attempt_at"] is None

@@ -1,0 +1,19 @@
+edits:
+  - file: subscriptions.py
+    find: "def pause(ctx: Context, subscription_id: SubscriptionId) -> Subscription:"
+    replace: |
+      def extend_trial(ctx: Context, subscription_id: SubscriptionId, days: int) -> Subscription:
+          subscription = ctx.store.require_subscription(subscription_id)
+          if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
+              raise ValidationError("days must be a positive integer")
+          trial_end = subscription["trial_end"]
+          if subscription["status"] != "trialing" or trial_end is None:
+              raise InvalidStateError("only trialing subscriptions can have their trial extended")
+          extended = EpochSeconds(trial_end + days * SECONDS_PER_DAY)
+          subscription["trial_end"] = extended
+          subscription["current_period_end"] = extended
+          emit(ctx, "subscription.updated", {"subscription": subscription_json(subscription), "previous_status": "trialing"})
+          return subscription
+
+
+      def pause(ctx: Context, subscription_id: SubscriptionId) -> Subscription:

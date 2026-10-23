@@ -1,0 +1,29 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+
+
+def test_retries_exhausted_after_cancel_marks_uncollectible():
+    from conftest import World
+
+    w = World({"retry_offsets_days": [1], "final_action": "mark_unpaid"})
+    cus = w.customer(last4="0002")
+    sub = w.engine.subscribe(cus["id"], [(w.monthly["id"], 1)])
+    w.engine.cancel(sub["id"], at_period_end=False)
+    w.advance_days(1)
+    [inv] = w.engine.invoices_for(cus["id"])
+    assert sub["status"] == "canceled"
+    assert inv["status"] == "uncollectible"
+```
+
+It fails with:
+
+```
+billing.errors.InvalidStateError: subscription cannot go from active to unpaid
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

@@ -1,0 +1,57 @@
+id: mut02_usage_drop_conversion
+category: bugfix
+stratum: type_relevant
+origin: mutant
+title: Random drop conversion mutant in usage.py
+read_only: false
+bug_kind: drop_conversion
+checker_catches_at: none
+relevant_files:
+- usage.py
+mutations:
+- file: usage.py
+  find: |2
+        end = to_millis(period_end)
+  replace: |2
+        end = period_end
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+
+
+  def test_usage_outside_period_not_billed(world):
+      cus = world.customer()
+      sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
+      start_ms = sub["current_period_start"] * 1000
+      world.engine.report_usage(sub["id"], world.api_calls["id"], 7, timestamp=start_ms - 1)
+      world.engine.report_usage(sub["id"], world.api_calls["id"], 5, timestamp=start_ms)
+      created = world.advance_days(31)
+      assert created[0]["lines"][0]["quantity"] == 5
+  ```
+
+  It fails with:
+
+  ```
+  assert 0 == 5
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: usage.py
+  function: records_in_period
+grader:
+  type: tests
+  target_tests:
+  - base/test_lifecycle.py::test_renewal_bills_usage_in_arrears
+  - base/test_lifecycle.py::test_usage_outside_period_not_billed
+mutant:
+  site: usage.py:51
+  operator: drop_conversion
+  index: 2
+  hidden_failing: 2
+  mypy_errors_l3: 0
+  mypy_errors_l2: 0

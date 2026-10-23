@@ -1,0 +1,204 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 9,
+  "duration_ms": 63478,
+  "api_duration_ms": 42871,
+  "cost_usd": 0.1266735,
+  "input_tokens": 18,
+  "output_tokens": 3925,
+  "cache_read_tokens": 141235,
+  "cache_write_tokens": 18316,
+  "reasoning_tokens": null,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 159569,
+  "tool_calls": 8,
+  "tool_calls_by_kind": {
+    "read": 5,
+    "edit": 1,
+    "answer": 1,
+    "test": 1
+  },
+  "reads": 5,
+  "searches": 0,
+  "edits": 1,
+  "test_runs": 1,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 1,
+  "subagent_calls": 0,
+  "files_read": [
+    "__init__.py",
+    "config.py",
+    "openvex_parser.py",
+    "parser.py"
+  ],
+  "unique_files_read": 4,
+  "rereads": 0,
+  "read_chars": 26887,
+  "search_chars": 0,
+  "tool_output_chars": 29977,
+  "relevant_files_read": 2,
+  "exploration_precision": 0.5,
+  "exploration_recall": 1.0,
+  "steps_before_first_edit": 4,
+  "final_message": "The chainguard-libraries provider now keeps npm and golang products as well as pypi and maven. Of the 1,427 tests, 1,412 pass and 15 fail. All 15 failures are in `tests/quality/test_configure.py`, and the ones I looked at fail on a missing `yardstick` module.\n\nI added no tests for the new behaviour. I only checked it by hand with a short script: a `null` value drops that ecosystem from the map, and an empty marker raises `empty version marker for ['npm']`. I didn't try the non-map check, a config file or an environment variable override.\n\n- **Option and defaults:** `Config.version_markers` defaults to `{\"pypi\": \"+cgr.\", \"maven\": \".cgr.\", \"npm\": \"-cgr.\", \"golang\": \"-cgr.\"}`. `OpenVEXParser` takes `version_markers`, exposes it as `parser.version_markers`, and `_filter_statements` uses it.\n- **Merging:** config files merge into the default map key by key through the existing loader.\n- **`null` values:** `Config.__post_init__` removes any key set to `null`.\n- **Empty marker:** it raises `ValueError(\"empty version marker for ['<type>']\")`, listing the offending types.\n- **Non-map value:** the parser validates it and raises a `ValueError` containing `version_markers must be a map`. This check sits in the parser because environment overrides are applied after the config is built, so a string from an environment variable only reaches the parser when the provider starts.\n- **CLI output:** the option appears in the CLI config output, and I updated the expected output in `tests/unit/cli/test_cli.py`.\n\nI also wrote `answer.json` in the repository root. The code changes are in `src/vunnel/providers/chainguard_libraries/__init__.py` and `openvex_parser.py`. The tests only run when `PYTHONPATH=src` is set, because `vunnel` isn't installed in `.venv`.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "config.py",
+        "parser.py",
+        "__init__.py"
+      ],
+      "read_paths": [
+        "config.py",
+        "parser.py",
+        "__init__.py"
+      ],
+      "kinds": [
+        "other",
+        "read",
+        "search"
+      ],
+      "command": "cd src/vunnel/providers/chainguard_libraries && ls && cat config.py parser.py __init__.py; grep -rn \"chainguard\" /tmp/bsvc-80uhpywj/vunnel --include=*.py --include=*.yaml --include=*.md -il --exclude-dir=.venv",
+      "output_chars": 2951,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "src/vunnel/providers/chainguard_libraries/openvex_parser.py"
+      ],
+      "read_paths": [
+        "src/vunnel/providers/chainguard_libraries/openvex_parser.py"
+      ],
+      "kinds": [
+        "other",
+        "read",
+        "search"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel; cat src/vunnel/providers/chainguard_libraries/openvex_parser.py; grep -rli \"chainguard.libraries\\|chainguard_libraries\" --exclude-dir=.venv --exclude-dir=.git . | head -20; grep -n \"__post_init__\\|marker\" -r src/vunnel/providers/*/__init__.py | head",
+      "output_chars": 12939,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "src/vunnel/providers/github/__init__.py"
+      ],
+      "read_paths": [
+        "src/vunnel/providers/github/__init__.py"
+      ],
+      "kinds": [
+        "other",
+        "read",
+        "search"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel; grep -n -i -B3 -A12 \"chainguard\" tests/unit/cli/test_cli.py | head -80; sed -n 1,60p src/vunnel/providers/github/__init__.py; grep -n \"import\\|yaml\\|wizard\\|environ\" src/vunnel/cli/config.py | head -30",
+      "output_chars": 4829,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "src/vunnel/cli/config.py"
+      ],
+      "read_paths": [
+        "src/vunnel/cli/config.py"
+      ],
+      "kinds": [
+        "other",
+        "read"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel; sed -n 95,260p src/vunnel/cli/config.py",
+      "output_chars": 4799,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "tests/unit/cli/test_cli.py",
+        "dict",
+        "marker",
+        "marker",
+        "None"
+      ],
+      "read_paths": [
+        "tests/unit/cli/test_cli.py"
+      ],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel/src/vunnel/providers/chainguard_libraries && python3 - <<'E'\np='openvex_parser.py'\ns=open(p).read()\ns=s.replace('''class OpenVEXParser:\n''','''DEFAULT_VERSION_MARKERS: dict[str, str] = {\"pypi\": \"+cgr.\", \"maven\": \".cgr.\", \"npm\": \"-cgr.\", \"golang\": \"-cgr.\"}\n\n\ndef validate_version_markers(markers: Any) -> dict[str, str]:\n    if not isinstance(markers, dict):\n        raise ValueError(f\"version_markers must be a map of purl type to marker, got {type(markers).__name__}\")\n    empty = sorted(str(k) for k, v in markers.items() if not v)\n    if empty:\n        raise ValueError(f\"empty version marker for {empty}\")\n    return dict(markers)\n\n\nclass OpenVEXParser:\n''',1)\ns=s.replace('''        user_agent: str | None = None,\n    ):''','''        user_agent: str | None = None,\n        version_markers: dict[str, str] | None = None,\n    ):''',1)\ns=s.replace('''        :param str user_agent: User-Agent header for HTTP requests\n        \"\"\"\n''','''        :param str user_agent: User-Agent header for HTTP requests\n        :param dict version_markers: purl type -> marker a Chainguard-built version must contain\n        \"\"\"\n        if version_markers is None:\n            version_markers = DEFAULT_VERSION_MARKERS\n        self.version_markers = validate_version_markers(version_markers)\n''',1)\ns=s.replace('''        d = {\"pypi\": \"+cgr.\", \"maven\": \".cgr.\"}\n''','''        d = self.version_markers\n''',1)\nopen(p,'w').write(s)\np='__init__.py'\ns=open(p).read()\ns=s.replace(\"from .openvex_parser import OpenVEXParser\",\"from .openvex_parser import DEFAULT_VERSION_MARKERS, OpenVEXParser, validate_version_markers\")\ns=s.replace('''/all.json\"\n''','''/all.json\"\n    # purl type -> marker a Chainguard-built version must contain; a null value disables the ecosystem\n    version_markers: dict[str, str | None] = field(default_factory=lambda: dict(DEFAULT_VERSION_MARKERS))  # type: ignore[arg-type]\n\n    def __post_init__(self) -> None:\n        if isinstance(self.version_markers, dict):\n            self.version_markers = {k: v for k, v in self.version_markers.items() if v is not None}\n            validate_version_markers(self.version_markers)\n''',1)\ns=s.replace('''            user_agent=self.runtime_cfg.user_agent,\n''','''            user_agent=self.runtime_cfg.user_agent,\n            version_markers=self.config.version_markers,  # type: ignore[arg-type]\n''',1)\nopen(p,'w').write(s)\nE\ncd ../../../..; sed -n 286,310p tests/unit/cli/test_cli.py",
+      "output_chars": 743,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Bash",
+      "paths": [
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "run"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel; python3 - <<'E'\np='tests/unit/cli/test_cli.py'\ns=open(p).read()\na='''      user_agent: anchore/vunnel-$VUNNEL_VERSION\n  common:'''\ni=s.index(\"  chainguard_libraries:\")\nj=s.index(a,i)\ns=s[:j]+'''      user_agent: anchore/vunnel-$VUNNEL_VERSION\n    version_markers:\n      golang: -cgr.\n      maven: .cgr.\n      npm: -cgr.\n      pypi: +cgr.\n  common:'''+s[j+len(a):]\nopen(p,'w').write(s)\nE\necho '{\"summary\": \"Added a configurable version_markers option (defaults now include npm and golang) to the chainguard-libraries Config and OpenVEX parser, with key-wise merging, null-to-disable, and validation of empty or non-map values.\"}' > answer.json\n.venv/bin/python -m pytest -q 2>&1 | tail -8\n.venv/bin/python -c \"\nfrom vunnel.providers.chainguard_libraries import Config\nprint(Config(version_markers={'npm':None,'pypi':'x'}).version_markers)\ntry: Config(version_markers={'npm':''})\nexcept ValueError as e: print(e)\"",
+      "output_chars": 446,
+      "error": true,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel; export PYTHONPATH=src\n.venv/bin/python -m pytest -q 2>&1 | tail -8\n.venv/bin/python -c \"\nfrom vunnel.providers.chainguard_libraries import Config\nprint(Config(version_markers={'npm':None,'pypi':'x'}).version_markers)\ntry: Config(version_markers={'npm':''})\nexcept ValueError as e: print(e)\"",
+      "output_chars": 1369,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "search",
+        "test",
+        "vcs"
+      ],
+      "command": "cd /tmp/bsvc-80uhpywj/vunnel; PYTHONPATH=src .venv/bin/python -m pytest -q 2>&1 | grep FAILED | grep -v yardstick; git status --short",
+      "output_chars": 1901,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 64.4,
+  "timed_out": false,
+  "exit_code": 0,
+  "budget_exhausted": false
+}

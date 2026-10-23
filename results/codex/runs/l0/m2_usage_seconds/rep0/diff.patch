@@ -1,0 +1,127 @@
+diff --git a/billing/api.py b/billing/api.py
+index 4ffbaf0..0e3159e 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -71,7 +71,11 @@ def report_usage(engine, _, body):
+         timestamp,
+         _optional_str(body, "idempotency_key"),
+     )
+-    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp"]}
++    return 201, {
++        "id": record["id"],
++        "quantity": record["quantity"],
++        "timestamp": record["timestamp"] * 1000 + record["timestamp_ms_remainder"],
++    }
+ 
+ 
+ def get_invoice(engine, params, _):
+diff --git a/billing/usage.py b/billing/usage.py
+index 57987e0..7eebecd 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_seconds
+ from .errors import ValidationError
+ 
+ 
+@@ -17,12 +17,14 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    reported_at = timestamp if timestamp is not None else ctx.clock.now() * 1000
+     record = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": to_seconds(reported_at),
++        "timestamp_ms_remainder": reported_at % 1000,
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+@@ -32,12 +34,11 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+-    start = to_millis(period_start)
+-    end = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp"], record["timestamp_ms_remainder"], record["id"]))
+ 
+ 
+ def aggregate_usage(ctx, subscription_id, price_id, period_start, period_end):
+diff --git a/tests/test_usage.py b/tests/test_usage.py
+new file mode 100644
+index 0000000..2e48132
+--- /dev/null
++++ b/tests/test_usage.py
+@@ -0,0 +1,60 @@
++from billing import catalog, usage
++from billing.api import handle
++
++
++def test_usage_timestamps_are_stored_in_seconds_and_api_echoes_milliseconds(world):
++    customer = world.customer()
++    subscription = world.engine.subscribe(customer["id"], [(world.api_calls["id"], 0)])
++    reported_at = world.clock.now() * 1000 + 123
++
++    record = usage.report_usage(world.ctx, subscription["id"], world.api_calls["id"], 2, reported_at)
++    assert record["timestamp"] == world.clock.now()
++    assert record["timestamp_ms_remainder"] == 123
++    assert world.ctx.store.usage_records[record["id"]] is record
++
++    engine_record = world.engine.report_usage(subscription["id"], world.api_calls["id"], 3)
++    assert engine_record["timestamp"] == world.clock.now()
++    assert engine_record["timestamp_ms_remainder"] == 0
++
++    body = {
++        "subscription": subscription["id"],
++        "price": world.api_calls["id"],
++        "quantity": 4,
++        "timestamp": reported_at + 1,
++        "idempotency_key": "usage-1",
++    }
++    status, response = handle(world.engine, "POST", "/usage", body)
++    assert status == 201
++    assert response["timestamp"] == body["timestamp"]
++    assert world.ctx.store.usage_records[response["id"]]["timestamp"] == world.clock.now()
++    assert handle(world.engine, "POST", "/usage", body) == (status, response)
++
++
++def test_usage_billing_preserves_period_edges_and_millisecond_order(world):
++    last_price = catalog.create_price(
++        world.ctx, world.api["id"], "usd", "metered", unit_amount=3, usage_aggregation="last"
++    )
++    customer = world.customer()
++    subscription = world.engine.subscribe(
++        customer["id"], [(world.api_calls["id"], 0), (last_price["id"], 0)]
++    )
++    start = subscription["current_period_start"]
++    end = subscription["current_period_end"]
++
++    for timestamp, quantity in (
++        (start * 1000 - 1, 100),
++        (start * 1000, 5),
++        (end * 1000 - 1, 7),
++        (end * 1000, 100),
++    ):
++        world.engine.report_usage(subscription["id"], world.api_calls["id"], quantity, timestamp)
++
++    # Report the later event first so record IDs alone cannot determine "last".
++    world.engine.report_usage(subscription["id"], last_price["id"], 9, end * 1000 - 1)
++    world.engine.report_usage(subscription["id"], last_price["id"], 4, end * 1000 - 999)
++
++    world.clock.set(end)
++    invoices = world.engine.run_cycle()
++    usage_lines = {line["price_id"]: line for line in invoices[0]["lines"] if line["kind"] == "usage"}
++    assert usage_lines[world.api_calls["id"]]["quantity"] == 12
++    assert usage_lines[last_price["id"]]["quantity"] == 9

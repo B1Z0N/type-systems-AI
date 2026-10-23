@@ -1,0 +1,14 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 1,
+  "target_total": 1,
+  "regressions": [],
+  "failed_targets": [],
+  "location_correct": true,
+  "answer": {
+    "file": "refunds.py",
+    "function": "refund_invoice"
+  },
+  "answer_error": null
+}

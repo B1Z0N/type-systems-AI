@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 10,
+  "target_total": 10,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added a configurable version_markers option (defaults now include npm and golang) to the chainguard-libraries Config and OpenVEX parser, with null-disable, empty-marker and non-map validation."
+  },
+  "answer_error": null
+}

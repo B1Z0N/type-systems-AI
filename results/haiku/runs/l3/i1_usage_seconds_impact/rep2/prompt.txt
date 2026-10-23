@@ -1,0 +1,8 @@
+We want to store `timestamp` on usage records in epoch seconds instead of the current unit,
+while the public API and `report_usage` keep accepting the old unit from clients.
+Do not make the change. List every function whose code would have to change.
+Name functions as `module.function` (methods as `module.Class.method`), relative to the
+`billing` package.
+
+Do not modify any files other than `answer.json`. When you are done, write your final answer as JSON to `answer.json` in the repository root, using exactly this shape:
+{"functions": ["<module.function>", ...]}

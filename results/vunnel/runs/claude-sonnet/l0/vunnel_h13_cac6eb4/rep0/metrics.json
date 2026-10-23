@@ -1,0 +1,144 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 7,
+  "duration_ms": 98316,
+  "api_duration_ms": 91808,
+  "cost_usd": 0.0535128,
+  "input_tokens": 10,
+  "output_tokens": 1777,
+  "cache_read_tokens": 47868,
+  "cache_write_tokens": 7734,
+  "reasoning_tokens": null,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 55612,
+  "tool_calls": 6,
+  "tool_calls_by_kind": {
+    "read": 2,
+    "edit": 2,
+    "answer": 1,
+    "test": 1
+  },
+  "reads": 2,
+  "searches": 0,
+  "edits": 2,
+  "test_runs": 2,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "__init__.py"
+  ],
+  "unique_files_read": 1,
+  "rereads": 0,
+  "read_chars": 4318,
+  "search_chars": 0,
+  "tool_output_chars": 5111,
+  "relevant_files_read": 1,
+  "exploration_precision": 1.0,
+  "exploration_recall": 1.0,
+  "steps_before_first_edit": 2,
+  "final_message": "`register()` now takes a `mode` argument. It resolves the mode from `VUNNEL_PLUGIN_OVERRIDE_MODE` at call time when you don't pass one. The unit tests pass (911). I didn't add tests for the new modes, so `REPLACE`, `IGNORE` and the env parsing haven't been exercised directly.\n\n- **Test setup:** a plain `pytest` run failed to import `vunnel` in this environment. I ran the tests with `PYTHONPATH=src .venv/bin/python -m pytest -q tests/unit`, so that's what the result covers.\n- **`PluginOverrideMode`:** it's in `src/vunnel/providers/__init__.py` with members `FAIL`, `REPLACE` and `IGNORE`. `from_env()` reads the variable case-insensitively and falls back to `FAIL` for unset, empty or unknown values.\n- **`register(name, cls, mode=None)`:** on a collision with a different class, `FAIL` raises `KeyError` as before, `REPLACE` makes the new class win, and `IGNORE` keeps the existing one. Names that don't collide register normally in every mode.\n- **`answer.json`:** it's written in the repo root with the one-sentence summary.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "search"
+      ],
+      "command": "cd src/vunnel && grep -n \"register\\|^import\\|^from\" providers/__init__.py | head -50",
+      "output_chars": 327,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Read",
+      "paths": [
+        "src/vunnel/providers/__init__.py"
+      ],
+      "read_paths": [
+        "src/vunnel/providers/__init__.py"
+      ],
+      "kinds": [
+        "read"
+      ],
+      "command": null,
+      "output_chars": 3991,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Edit",
+      "paths": [
+        "src/vunnel/providers/__init__.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit"
+      ],
+      "command": null,
+      "output_chars": 150,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Edit",
+      "paths": [
+        "src/vunnel/providers/__init__.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit"
+      ],
+      "command": null,
+      "output_chars": 150,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Bash",
+      "paths": [
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "test"
+      ],
+      "command": "cd /tmp/bsvc-cdgs3ptj/vunnel && echo '{\"summary\": \"Added PluginOverrideMode (FAIL/REPLACE/IGNORE, env-driven via VUNNEL_PLUGIN_OVERRIDE_MODE) and a mode parameter on register() to control collisions with existing providers.\"}' > answer.json && .venv/bin/python -m pytest -q 2>&1 | tail -4",
+      "output_chars": 253,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "read",
+        "test"
+      ],
+      "command": "PYTHONPATH=src .venv/bin/python -m pytest -q tests/unit 2>&1 | tail -4",
+      "output_chars": 240,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 99.2,
+  "timed_out": false,
+  "exit_code": 0,
+  "budget_exhausted": false
+}

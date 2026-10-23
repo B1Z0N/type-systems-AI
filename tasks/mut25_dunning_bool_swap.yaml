@@ -1,0 +1,28 @@
+id: mut25_dunning_bool_swap
+category: bugfix
+stratum: type_neutral
+title: Declined cards are retried every day
+read_only: false
+checker_catches_at: none
+relevant_files:
+- dunning.py
+mutations:
+- file: dunning.py
+  find: |2
+            if invoice["status"] == "open" and invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
+  replace: |2
+            if invoice["status"] == "open" or invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
+prompt: |
+  Customers whose card keeps getting declined are charged far too often. With the default dunning
+  policy, retries should follow the policy's schedule, but instead the card is charged again on
+  every billing cycle run: after the first week an invoice shows 8 charge attempts instead of 4, and
+  the subscription never reaches its final dunning state on schedule. Find the root cause and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: dunning.py
+  function: due_for_retry
+grader:
+  type: tests
+  target_tests:
+  - base/test_dunning_refunds.py::test_failed_payment_goes_past_due_then_unpaid

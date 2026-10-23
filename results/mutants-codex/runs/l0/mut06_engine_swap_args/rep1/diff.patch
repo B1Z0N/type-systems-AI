@@ -1,0 +1,37 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index afbac79..33c6758 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -87,7 +87,7 @@ class BillingEngine:
+         return payments.collect(self.ctx, invoice_id)
+ 
+     def refund(self, invoice_id, reason="requested_by_customer"):
+-        return refunds.refund_invoice(invoice_id, self.ctx, reason)
++        return refunds.refund_invoice(self.ctx, invoice_id, reason)
+ 
+     def invoices_for(self, customer_id):
+         return sorted(self.ctx.store.invoices_for(customer_id), key=lambda inv: (inv["created_at"], inv["id"]))
+diff --git a/tests/test_webhooks_reports_api.py b/tests/test_webhooks_reports_api.py
+index b4b87fb..108e546 100644
+--- a/tests/test_webhooks_reports_api.py
++++ b/tests/test_webhooks_reports_api.py
+@@ -1,6 +1,6 @@
+ import json
+ 
+-from billing import webhooks
++from billing import reports, webhooks
+ from billing.api import handle
+ 
+ 
+@@ -55,3 +55,11 @@ def test_api_round_trip(world):
+     status, err = handle(world.engine, "GET", "/invoices/in_999999")
+     assert status == 404
+     assert handle(world.engine, "POST", "/usage", {"subscription": sub["id"]})[0] == 400
++
++
++def test_revenue_between_nets_credit_notes(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    world.engine.refund(inv["id"])
++    assert reports.revenue_between(world.ctx, inv["paid_at"], inv["paid_at"] + 1) == {"usd": 0}

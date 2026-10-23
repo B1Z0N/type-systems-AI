@@ -1,0 +1,227 @@
+diff --git a/src/vunnel/cli/config.py b/src/vunnel/cli/config.py
+index 60f4d13..a53f22e 100644
+--- a/src/vunnel/cli/config.py
++++ b/src/vunnel/cli/config.py
+@@ -226,7 +226,18 @@ def load(path: str = ".vunnel.yaml") -> Application:
+             # from the containing class.
+             instance = Application().to_dict()
+ 
++            markers = app_object.get("providers", {}).get("chainguard_libraries", {}).get("version_markers", {})
++            if not isinstance(markers, dict):
++                raise ValueError("version_markers must be a map")
++
+             mergedeep.merge(instance, app_object)
++            markers = instance["providers"]["chainguard_libraries"]["version_markers"]
++            empty = sorted(key for key, marker in markers.items() if marker == "")
++            if empty:
++                raise ValueError(f"empty version marker for {empty}")
++            instance["providers"]["chainguard_libraries"]["version_markers"] = {
++                key: marker for key, marker in markers.items() if marker is not None
++            }
+             cfg = Application.from_dict(instance)
+             if cfg is None:
+                 raise FileNotFoundError("parsed empty config")
+@@ -235,5 +246,6 @@ def load(path: str = ".vunnel.yaml") -> Application:
+ 
+     # ensure env vars take precedence over config file values
+     apply_env_overrides(cfg)
++    cfg.providers.chainguard_libraries.validate_version_markers()
+ 
+     return cfg
+diff --git a/src/vunnel/providers/chainguard_libraries/__init__.py b/src/vunnel/providers/chainguard_libraries/__init__.py
+index f984b06..7574136 100644
+--- a/src/vunnel/providers/chainguard_libraries/__init__.py
++++ b/src/vunnel/providers/chainguard_libraries/__init__.py
+@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
+ from vunnel import provider, result, schema
+ from vunnel.utils import timer
+ 
+-from .openvex_parser import OpenVEXParser
++from .openvex_parser import DEFAULT_VERSION_MARKERS, OpenVEXParser
+ 
+ if TYPE_CHECKING:
+     import datetime
+@@ -33,6 +33,18 @@ class Config:
+     )
+     request_timeout: int = 125
+     openvex_url: str = "https://libraries.cgr.dev/openvex/v1/all.json"
++    version_markers: dict[str, str | None] = field(default_factory=DEFAULT_VERSION_MARKERS.copy)
++
++    def __post_init__(self) -> None:
++        self.validate_version_markers()
++
++    def validate_version_markers(self) -> None:
++        if not isinstance(self.version_markers, dict):
++            raise ValueError("version_markers must be a map")
++        empty = sorted(key for key, marker in self.version_markers.items() if marker == "")
++        if empty:
++            raise ValueError(f"empty version marker for {empty}")
++        self.version_markers = {key: marker for key, marker in self.version_markers.items() if marker is not None}
+ 
+ 
+ class Provider(provider.Provider):
+@@ -54,6 +66,7 @@ class Provider(provider.Provider):
+             download_timeout=self.config.request_timeout,
+             logger=self.logger,
+             user_agent=self.runtime_cfg.user_agent,
++            version_markers=self.config.version_markers,
+         )
+ 
+         # this provider requires the previous state from former runs
+diff --git a/src/vunnel/providers/chainguard_libraries/openvex_parser.py b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+index 75a481d..5e94a5a 100644
+--- a/src/vunnel/providers/chainguard_libraries/openvex_parser.py
++++ b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+@@ -19,11 +19,14 @@ if TYPE_CHECKING:
+     from vunnel import workspace
+ 
+ 
++DEFAULT_VERSION_MARKERS = {"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}
++
++
+ class OpenVEXParser:
+     _openvex_dir_ = "openvex"
+     _security_reference_url_ = "https://images.chainguard.dev/security"
+ 
+-    def __init__(  # noqa: PLR0913
++    def __init__(  # noqa: PLR0913, PLR0917
+         self,
+         workspace: workspace.Workspace,
+         url: str,
+@@ -33,6 +36,7 @@ class OpenVEXParser:
+         logger: logging.Logger | None = None,
+         security_reference_url: str | None = None,
+         user_agent: str | None = None,
++        version_markers: dict[str, str] | None = None,
+     ):
+         """
+         :param workspace.Workspace workspace: workspace to use for downloads and storage
+@@ -47,6 +51,7 @@ class OpenVEXParser:
+         self.namespace = namespace
+         self.workspace = workspace
+         self.user_agent = user_agent
++        self.version_markers = version_markers if version_markers is not None else DEFAULT_VERSION_MARKERS.copy()
+ 
+         if not fixdater:
+             fixdater = fixdate.default_finder(workspace)
+@@ -239,7 +244,6 @@ class OpenVEXParser:
+         :param statement: [openvex statement](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md)
+         :return: statement with only chainguard products
+         """
+-        d = {"pypi": "+cgr.", "maven": ".cgr."}
+         new_products = []
+         for product in statement.get("products", []):
+             pid = self._get_purl(product)
+@@ -248,7 +252,7 @@ class OpenVEXParser:
+                 continue
+             purl = PackageURL.from_string(pid)
+             # keep product if valid type and matches chainguard fragment for type
+-            if purl.type in d and purl.version and d[purl.type] in purl.version:
++            if (marker := self.version_markers.get(purl.type)) and purl.version and marker in purl.version:
+                 new_products.append(product)
+         statement["products"] = new_products
+         return statement
+diff --git a/tests/unit/cli/test_cli.py b/tests/unit/cli/test_cli.py
+index 63ac1d2..333d718 100644
+--- a/tests/unit/cli/test_cli.py
++++ b/tests/unit/cli/test_cli.py
+@@ -304,6 +304,11 @@ providers:
+       skip_download: false
+       skip_newer_archive_check: false
+       user_agent: anchore/vunnel-$VUNNEL_VERSION
++    version_markers:
++      golang: -cgr.
++      maven: .cgr.
++      npm: -cgr.
++      pypi: +cgr.
+   common:
+     import_results:
+       enabled: false
+diff --git a/tests/unit/cli/test_config.py b/tests/unit/cli/test_config.py
+index 0320c8a..1f52a33 100644
+--- a/tests/unit/cli/test_config.py
++++ b/tests/unit/cli/test_config.py
+@@ -1,6 +1,7 @@
+ from __future__ import annotations
+ 
+ from dataclasses import dataclass, field
++from re import escape
+ from typing import Optional
+ 
+ import pytest
+@@ -8,6 +9,33 @@ from vunnel import provider, providers, result
+ from vunnel.cli import config
+ 
+ 
++def test_chainguard_libraries_version_markers_merge(tmp_path):
++    path = tmp_path / "config.yaml"
++    path.write_text("providers:\n  chainguard_libraries:\n    version_markers:\n      npm: -custom.\n      maven: null\n")
++    markers = config.load(str(path)).providers.chainguard_libraries.version_markers
++    assert markers == {"pypi": "+cgr.", "npm": "-custom.", "golang": "-cgr."}
++
++
++@pytest.mark.parametrize("value,message", [
++    ("      npm: ''\n      pypi: ''\n", "empty version marker for ['npm', 'pypi']"),
++    ("    version_markers: invalid\n", "version_markers must be a map"),
++])
++def test_chainguard_libraries_invalid_version_markers(tmp_path, value, message):
++    path = tmp_path / "config.yaml"
++    if "version_markers:" in value:
++        path.write_text("providers:\n  chainguard_libraries:\n" + value)
++    else:
++        path.write_text("providers:\n  chainguard_libraries:\n    version_markers:\n" + value)
++    with pytest.raises(ValueError, match=escape(message)):
++        config.load(str(path))
++
++
++def test_chainguard_libraries_env_version_markers_is_rejected(tmp_path, monkeypatch):
++    monkeypatch.setenv("VUNNEL_PROVIDERS_CHAINGUARD_LIBRARIES_VERSION_MARKERS", "invalid")
++    with pytest.raises(ValueError, match="version_markers must be a map"):
++        config.load(str(tmp_path / "missing.yaml"))
++
++
+ def test_minimal_config(helpers):
+     cfg_path = helpers.local_dir("test-fixtures/minimal.yaml")
+     cfg = config.load(path=cfg_path)
+diff --git a/tests/unit/providers/chainguard_libraries/test_openvex_parser.py b/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
+index d7612c9..920cf6f 100644
+--- a/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
++++ b/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
+@@ -31,6 +31,25 @@ def openvex_parser(tmpdir, mock_logger, auto_fake_fixdate_finder):
+ 
+ 
+ class TestOpenVEXParser:
++    def test_filter_statements_uses_configured_markers(self, openvex_parser):
++        products = [
++            {"identifiers": {"purl": f"pkg:{kind}/example@1.0{suffix}"}}
++            for kind, suffix in [
++                ("pypi", "+cgr.1"), ("maven", ".cgr.1"),
++                ("npm", "-cgr.1"), ("golang", "-cgr.1"),
++                ("npm", "-other.1"), ("cargo", "-cgr.1"),
++            ]
++        ]
++        assert openvex_parser.version_markers == {
++            "pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."
++        }
++        assert openvex_parser._filter_statements({"products": products})["products"] == products[:4]
++
++        openvex_parser.version_markers = {"npm": "-custom."}
++        assert openvex_parser._filter_statements({"products": products})["products"] == []
++        custom_product = {"identifiers": {"purl": "pkg:npm/example@1.0-custom.2"}}
++        assert openvex_parser._filter_statements({"products": [custom_product]})["products"] == [custom_product]
++
+     def test_init_default_values(self, tmpdir, mock_logger, auto_fake_fixdate_finder):
+         parser = OpenVEXParser(
+             workspace=workspace.Workspace(tmpdir, "test", create=True),
+diff --git a/tests/unit/providers/chainguard_libraries/test_provider.py b/tests/unit/providers/chainguard_libraries/test_provider.py
+index a814d8c..0f527e9 100644
+--- a/tests/unit/providers/chainguard_libraries/test_provider.py
++++ b/tests/unit/providers/chainguard_libraries/test_provider.py
+@@ -18,6 +18,7 @@ def test_provider_via_snapshot(helpers, disable_get_requests, monkeypatch, auto_
+         root=workspace.root,
+         config=c,
+     )
++    assert p.parser.version_markers == c.version_markers
+     def mock_download(filename: str):
+         return None
+     monkeypatch.setattr(p.parser, "_download", mock_download)

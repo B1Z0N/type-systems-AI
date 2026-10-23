@@ -1,0 +1,13 @@
+diff --git a/billing/invoices.py b/billing/invoices.py
+index 819850b..017ea89 100644
+--- a/billing/invoices.py
++++ b/billing/invoices.py
+@@ -128,7 +128,7 @@ def apply_discounts(ctx: Context, invoice: dict, subscription: dict | None) -> N
+     if subscription is None or subscription["coupon_id"] is None:
+         return
+     coupon = ctx.store.get_coupon(subscription["coupon_id"])
+-    if coupon is None and not applies_this_period(coupon, subscription["coupon_periods_used"]):
++    if coupon is None or not applies_this_period(coupon, subscription["coupon_periods_used"]):
+         return
+     discounts = line_discounts(coupon, invoice["lines"], invoice["currency"], plan_lookup(ctx, invoice["lines"]))
+     for line, discount in zip(invoice["lines"], discounts):

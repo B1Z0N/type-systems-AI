@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Oracle Linux fixes now preserve architecture-specific versions while deduplicating versions shared across architectures."
+  },
+  "answer_error": null
+}

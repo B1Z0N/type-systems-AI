@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 4,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Usage records now store epoch seconds while the API preserves millisecond timestamps and billing behavior."
+  },
+  "answer_error": null
+}

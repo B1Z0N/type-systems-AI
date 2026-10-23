@@ -1,0 +1,1 @@
+{"summary": "Fixed Wolfi and Chainguard secdb parsing so unrecognized vulnerability IDs use only the distro security reference link."}

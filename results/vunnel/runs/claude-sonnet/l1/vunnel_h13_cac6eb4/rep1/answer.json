@@ -1,0 +1,1 @@
+{"summary": "Added PluginOverrideMode (FAIL/REPLACE/IGNORE, from VUNNEL_PLUGIN_OVERRIDE_MODE) and an optional mode argument to register()."}

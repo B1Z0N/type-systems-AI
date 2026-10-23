@@ -1,0 +1,1 @@
+{"summary": "Added subscriptions.extend_trial(ctx, subscription_id, days), which validates days as a positive int, requires a trialing subscription, shifts trial_end and current_period_end by the given days, and emits subscription.updated, with tests covering billing starting at the extended date."}

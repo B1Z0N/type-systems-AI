@@ -1,0 +1,42 @@
+diff --git a/billing/discounts.py b/billing/discounts.py
+index ed8ec7b..4d48857 100644
+--- a/billing/discounts.py
++++ b/billing/discounts.py
+@@ -67,7 +67,7 @@ def create_coupon(
+ def is_redeemable(coupon: Coupon, at: EpochSeconds) -> bool:
+     if coupon["valid_until"] is not None and at >= coupon["valid_until"]:
+         return False
+-    if coupon["max_redemptions"] is not None and coupon["times_redeemed"] > coupon["max_redemptions"]:
++    if coupon["max_redemptions"] is not None and coupon["times_redeemed"] >= coupon["max_redemptions"]:
+         return False
+     return True
+ 
+diff --git a/tests/test_discounts_tax.py b/tests/test_discounts_tax.py
+index 3dcbd8f..f6b3307 100644
+--- a/tests/test_discounts_tax.py
++++ b/tests/test_discounts_tax.py
+@@ -1,4 +1,7 @@
++import pytest
++
+ from billing import discounts, tax
++from billing.errors import InvalidStateError
+ 
+ 
+ def test_amount_off_allocated_across_lines(world):
+@@ -10,6 +13,16 @@ def test_amount_off_allocated_across_lines(world):
+     assert inv["total"] == 3500
+ 
+ 
++def test_exhausted_coupon_rejected_before_subscription_exists(world):
++    cus = world.customer()
++    coupon = discounts.create_coupon(world.ctx, "one", percent_off=1000, max_redemptions=1)
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], coupon_id=coupon["id"])
++    before = len(world.ctx.store.subscriptions)
++    with pytest.raises(InvalidStateError):
++        world.engine.subscribe(cus["id"], [(world.team_monthly["id"], 1)], coupon_id=coupon["id"])
++    assert len(world.ctx.store.subscriptions) == before
++
++
+ def test_exclusive_tax_after_discount(world):
+     tax.set_tax_rate(world.ctx, "US-CA", 825, "CA sales tax")
+     cus = world.customer(region="us-ca")

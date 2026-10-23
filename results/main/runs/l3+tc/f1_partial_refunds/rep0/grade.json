@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added optional partial-refund amounts to refund_invoice, BillingEngine.refund and the refund API, refunding oldest payments first with partially_refunded/refunded statuses and one credit note per refund."
+  },
+  "answer_error": null
+}

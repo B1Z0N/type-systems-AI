@@ -1,0 +1,13 @@
+diff --git a/src/vunnel/providers/wolfi/parser.py b/src/vunnel/providers/wolfi/parser.py
+index 40d3d68..7b5ff27 100644
+--- a/src/vunnel/providers/wolfi/parser.py
++++ b/src/vunnel/providers/wolfi/parser.py
+@@ -71,7 +71,7 @@ class Parser(abc.ABC):
+     def build_reference_links(self, vulnerability_id: str) -> list[str]:
+         urls = []
+         urls.append(f"{self.security_reference_url}/{vulnerability_id}")
+-        urls.extend(vulnerability.build_reference_links(vulnerability_id))
++        urls.extend(vulnerability.build_reference_links(vulnerability_id) or [])
+         return urls
+ 
+     @abc.abstractmethod

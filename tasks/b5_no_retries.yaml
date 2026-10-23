@@ -1,0 +1,25 @@
+id: b5_no_retries
+category: bugfix
+stratum: type_relevant
+title: Failed payments are never retried
+read_only: false
+checker_catches_at: l3
+relevant_files: [dunning.py, engine.py, payments.py, invoices.py]
+mutations:
+  - file: dunning.py
+    find: 'if invoice["status"] == "open" and invoice["next_attempt_at"] is not None'
+    replace: 'if invoice["status"] == "opened" and invoice["next_attempt_at"] is not None'
+prompt: |
+  After a card is declined, the payment is never retried: the invoice stays open with a
+  `next_attempt_at` in the past, and the subscription stays `past_due` forever instead of
+  recovering or eventually becoming `unpaid`. Find the root cause and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location: {file: dunning.py, function: due_for_retry}
+grader:
+  type: tests
+  target_tests:
+    - base/test_dunning_refunds.py::test_failed_payment_goes_past_due_then_unpaid
+    - base/test_dunning_refunds.py::test_cancel_policy_marks_uncollectible
+    - base/test_dunning_refunds.py::test_recovery_after_retry_succeeds
+    - base/test_dunning_refunds.py::test_retries_exhausted_after_cancel_marks_uncollectible

@@ -1,0 +1,113 @@
+diff --git a/billing/api.py b/billing/api.py
+index 8f1f9db..9b0b499 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -9,6 +9,7 @@ from .errors import BillingError, NotFoundError, ValidationError
+ from .models import CurrencyCode, CustomerId, EpochMillis, InvoiceId, JSONObject, JSONValue, PriceId, SubscriptionId
+ from .render import render_invoice
+ from .serialization import customer_json, invoice_json, subscription_json
++from .usage import usage_timestamp_millis
+ 
+ Response = tuple[int, JSONObject]
+ Handler = Callable[[BillingEngine, list[str], JSONObject], Response]
+@@ -81,7 +82,7 @@ def report_usage(engine: BillingEngine, _: list[str], body: JSONObject) -> Respo
+         timestamp,
+         _optional_str(body, "idempotency_key"),
+     )
+-    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp"]}
++    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": usage_timestamp_millis(record)}
+ 
+ 
+ def get_invoice(engine: BillingEngine, params: list[str], _: JSONObject) -> Response:
+diff --git a/billing/models.py b/billing/models.py
+index 535d9c4..bd37706 100644
+--- a/billing/models.py
++++ b/billing/models.py
+@@ -187,7 +187,8 @@ class UsageRecord(TypedDict):
+     subscription_id: SubscriptionId
+     price_id: PriceId
+     quantity: int
+-    timestamp: EpochMillis
++    timestamp: EpochSeconds
++    subsecond_ms: int
+     idempotency_key: str | None
+ 
+ 
+diff --git a/billing/usage.py b/billing/usage.py
+index a6900fa..62836c9 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -6,6 +6,11 @@ from .errors import ValidationError
+ from .models import EpochMillis, EpochSeconds, PriceId, SubscriptionId, UsageRecord
+ 
+ 
++def usage_timestamp_millis(record: UsageRecord) -> EpochMillis:
++    """The record's timestamp in the client-facing epoch milliseconds unit."""
++    return EpochMillis(to_millis(record["timestamp"]) + record["subsecond_ms"])
++
++
+ def report_usage(
+     ctx: Context,
+     subscription_id: SubscriptionId,
+@@ -26,12 +31,15 @@ def report_usage(
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    millis = timestamp if timestamp is not None else to_millis(ctx.clock.now())
++    seconds, subsecond_ms = divmod(millis, 1000)
+     record: UsageRecord = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": EpochSeconds(seconds),
++        "subsecond_ms": subsecond_ms,
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+@@ -47,12 +55,12 @@ def records_in_period(
+     period_start: EpochSeconds,
+     period_end: EpochSeconds,
+ ) -> list[UsageRecord]:
+-    start = to_millis(period_start)
+-    end = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp"], record["subsecond_ms"], record["id"]))
+ 
+ 
+ def aggregate_usage(
+diff --git a/tests/test_usage.py b/tests/test_usage.py
+new file mode 100644
+index 0000000..628b81b
+--- /dev/null
++++ b/tests/test_usage.py
+@@ -0,0 +1,22 @@
++from billing.api import handle
++from billing.clock import epoch
++from billing.usage import records_in_period
++
++
++def test_usage_timestamp_stored_in_seconds_and_echoed_in_millis(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 1)])
++    start = epoch(2026, 1, 15, 12)
++    millis = (start + 5) * 1000 + 250
++
++    status, body = handle(
++        world.engine,
++        "POST",
++        "/usage",
++        {"subscription": sub["id"], "price": world.api_calls["id"], "quantity": 4, "timestamp": millis},
++    )
++    assert status == 201 and body["timestamp"] == millis
++
++    (record,) = records_in_period(world.ctx, sub["id"], world.api_calls["id"], start, start + 60)
++    assert record["timestamp"] == start + 5
++    assert record["subsecond_ms"] == 250

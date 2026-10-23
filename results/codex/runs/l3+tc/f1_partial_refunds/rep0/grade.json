@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added optional partial invoice refunds across the service, engine, and API, with oldest-payment allocation and final credit restoration."
+  },
+  "answer_error": null
+}

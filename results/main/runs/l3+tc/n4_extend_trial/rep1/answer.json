@@ -1,0 +1,1 @@
+{"summary": "Added subscriptions.extend_trial, which moves trial_end and current_period_end later by whole days, emits subscription.updated, and validates input and state, with tests."}

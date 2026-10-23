@@ -1,0 +1,25 @@
+id: c3_usage_window
+category: question
+stratum: type_relevant
+title: Usage timestamps and billing windows
+read_only: true
+relevant_files: [usage.py, clock.py, invoices.py, engine.py, api.py]
+prompt: |
+  I'm integrating a client that reports metered usage. Answer from the code:
+
+  1. In what unit must the usage `timestamp` be given?
+  2. Is a usage record whose timestamp equals the exact start of a billing period counted
+     in that period? What about one exactly at the period end?
+  3. Is metered usage billed in advance (on the invoice that opens the period) or in arrears
+     (on the invoice after the period ends)?
+answer_schema: |
+  {"timestamp_unit": "seconds" | "milliseconds" | "microseconds",
+   "start_inclusive": <bool>, "end_inclusive": <bool>,
+   "billing_timing": "in_advance" | "in_arrears"}
+grader:
+  type: fields
+  expected:
+    timestamp_unit: milliseconds
+    start_inclusive: true
+    end_inclusive: false
+    billing_timing: in_arrears

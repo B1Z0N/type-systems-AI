@@ -1,0 +1,40 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 8b4f0b0..f1d75b2 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -34,7 +34,7 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     start = to_millis(period_start)
+     end = to_millis(period_end)
+-    records = [record for record in ctx.store.usage_for(subscription_id, price_id) if start < record["timestamp"] < end]
++    records = [record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 
+ 
+diff --git a/tests/test_usage.py b/tests/test_usage.py
+new file mode 100644
+index 0000000..04b834b
+--- /dev/null
++++ b/tests/test_usage.py
+@@ -0,0 +1,21 @@
++def test_usage_outside_period_not_billed(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    start_ms = sub["current_period_start"] * 1000
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 7, timestamp=start_ms - 1)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 5, timestamp=start_ms)
++    created = world.advance_days(31)
++    assert created[0]["lines"][0]["quantity"] == 5
++
++
++def test_usage_at_period_end_billed_in_next_period(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    end_ms = sub["current_period_end"] * 1000
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 3, timestamp=end_ms)
++
++    first = world.advance_days(31)
++    assert first[0]["lines"][0]["quantity"] == 0
++
++    second = world.advance_days(28)
++    assert second[0]["lines"][0]["quantity"] == 3

@@ -1,0 +1,46 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 80045f9..a14fa61 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .context import Context
+ from .errors import ValidationError
+ from .models import EpochMillis, EpochSeconds, PriceId, SubscriptionId, UsageRecord
+@@ -50,7 +50,9 @@ def records_in_period(
+     start = period_start
+     end = period_end
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if start <= to_seconds(record["timestamp"]) < end
+     ]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 
+diff --git a/tests/test_usage_billing.py b/tests/test_usage_billing.py
+new file mode 100644
+index 0000000..56e8ca4
+--- /dev/null
++++ b/tests/test_usage_billing.py
+@@ -0,0 +1,17 @@
++from billing.clock import to_millis
++
++
++def test_metered_renewal_bills_reported_usage(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 1)])
++    period_start = sub["current_period_start"]
++    world.clock.advance_days(10)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 30, to_millis(world.clock.now()))
++    world.clock.advance_days(10)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 12, to_millis(world.clock.now()))
++    [renewal] = world.advance_days(11)
++    usage_lines = [line for line in renewal["lines"] if line["kind"] == "usage"]
++    assert len(usage_lines) == 1
++    assert usage_lines[0]["quantity"] == 42
++    assert usage_lines[0]["period_start"] == period_start
++    assert renewal["total"] == 42 * 2

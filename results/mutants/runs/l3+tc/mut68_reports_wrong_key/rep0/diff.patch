@@ -1,0 +1,13 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index 2ce0b32..a845803 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -39,7 +39,7 @@ def monthly_amount(ctx: Context, subscription: Subscription) -> Cents:
+ def mrr(ctx: Context) -> dict[CurrencyCode, Cents]:
+     totals: dict[CurrencyCode, Cents] = {}
+     for subscription in ctx.store.subscriptions.values():
+-        if subscription["customer_id"] not in ("active", "past_due"):
++        if subscription["status"] not in ("active", "past_due"):
+             continue
+         currency = ctx.store.require_customer(subscription["customer_id"])["currency"]
+         totals[currency] = Cents(totals.get(currency, Cents(0)) + monthly_amount(ctx, subscription))

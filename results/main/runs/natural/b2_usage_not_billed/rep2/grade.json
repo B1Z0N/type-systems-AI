@@ -1,0 +1,14 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "location_correct": true,
+  "answer": {
+    "file": "usage.py",
+    "function": "records_in_period"
+  },
+  "answer_error": null
+}

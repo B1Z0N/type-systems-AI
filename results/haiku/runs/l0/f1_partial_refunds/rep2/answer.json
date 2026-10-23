@@ -1,0 +1,1 @@
+{"summary": "Added optional amount to refunds (engine, refund_invoice, and POST /invoices/{id}/refund) so invoices can be partially refunded oldest payment first, with partially_refunded/refunded payment statuses, one refunded credit note per refund, and ValidationError/InvalidStateError on invalid or exhausted amounts."}

@@ -1,0 +1,18 @@
+[project]
+name = "type-systems-ai"
+version = "0.1.0"
+description = "Do static types change how AI coding agents work? Experiment harness."
+requires-python = ">=3.11"
+dependencies = [
+    "libcst>=1.4",
+    "pyyaml>=6",
+    "pytest>=8",
+    "mypy>=1.11",
+    "matplotlib>=3.8",
+    "ruff>=0.17.1",
+    "pandas>=3.0.6",
+    "tabulate>=0.10.0",
+]
+
+[tool.uv]
+package = false

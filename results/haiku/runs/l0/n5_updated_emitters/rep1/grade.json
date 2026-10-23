@@ -1,0 +1,22 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "sets": {
+    "functions": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "missed": [],
+      "false_positives": []
+    }
+  },
+  "answer": {
+    "functions": [
+      "billing.subscriptions.transition",
+      "billing.subscriptions.change_items",
+      "billing.subscriptions.cancel",
+      "billing.subscriptions.reactivate"
+    ]
+  },
+  "answer_error": null
+}

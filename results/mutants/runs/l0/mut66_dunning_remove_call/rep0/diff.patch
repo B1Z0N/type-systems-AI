@@ -1,0 +1,10 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 7dd975b..8e305b7 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -66,4 +66,4 @@ def recover(ctx, invoice):
+         if inv["status"] == "open" and inv["id"] != invoice["id"]
+     ]
+     if not outstanding:
+-        pass
++        transition(ctx, subscription, "active")

@@ -1,0 +1,151 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 6,
+  "duration_ms": 23678,
+  "api_duration_ms": 20337,
+  "cost_usd": 0.076917,
+  "input_tokens": 12,
+  "output_tokens": 2461,
+  "cache_read_tokens": 69310,
+  "cache_write_tokens": 11338,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 80660,
+  "tool_calls": 5,
+  "tool_calls_by_kind": {
+    "read": 2,
+    "search": 1,
+    "edit": 2
+  },
+  "reads": 2,
+  "searches": 1,
+  "edits": 2,
+  "test_runs": 1,
+  "typecheck_runs": 2,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "customers.py",
+    "invoices.py",
+    "models.py",
+    "serialization.py"
+  ],
+  "files_edited": [
+    "invoices.py"
+  ],
+  "unique_files_edited": 1,
+  "unique_files_read": 4,
+  "rereads": 0,
+  "read_chars": 12001,
+  "search_chars": 1289,
+  "tool_output_chars": 13519,
+  "relevant_files_read": 3,
+  "exploration_precision": 0.75,
+  "exploration_recall": 0.6,
+  "steps_before_first_edit": 3,
+  "final_message": "Each customer now has a `net_terms_days` setting (default 7), and finalizing an invoice sets `due_at` from the customer's current value. The existing 24 tests pass and mypy is clean. I didn't add tests for the new behavior, so the negative-value check, the `update_customer` path and the API body field haven't been exercised.\n\n- **Create and update:** `create_customer(..., net_terms_days=...)` and `update_customer(..., net_terms_days=...)` both accept it. A negative value raises `ValidationError`. A non-integer value, including a boolean, does too.\n- **API:** `POST /customers` reads `net_terms_days` from the body and defaults to 7 when it's missing. A negative or non-integer value gives a 400.\n- **Invoices:** `finalize` looks up the customer at that moment, so a change to the term applies to invoices finalized afterwards.\n\nI also added `net_terms_days` to the customer JSON that the API and customer events return. The constant `INVOICE_NET_DAYS` stays in `models.py` as the default.\n\nI wrote `answer.json` in the repo root with the summary. The changes are in `billing/customers.py`, `invoices.py`, `api.py`, `models.py` and `serialization.py`. Nothing is committed.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/customers.py"
+      ],
+      "read_paths": [
+        "billing/customers.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && cat billing/customers.py && grep -rn \"7\\|due_at\\|customer\" billing --include=*.py | grep -v \"^billing/customers.py\" | head -60",
+      "output_chars": 5820,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "search",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "search"
+      ],
+      "command": "grep -rnE \"due_at|DUE|tax_exempt|NET_|\\b7\\b\" billing",
+      "output_chars": 1289,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/models.py",
+        "billing/serialization.py",
+        "billing/invoices.py"
+      ],
+      "read_paths": [
+        "billing/models.py",
+        "billing/serialization.py",
+        "billing/invoices.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "sed -n 55,75p billing/models.py; sed -n 5,30p billing/serialization.py; sed -n 235,255p billing/invoices.py; grep -n \"customer\" -B3 -A25 billing/api.py | head -90; grep -rn \"Customer = \\|\\\"tax_exempt\\\"\" tests billing | head",
+      "output_chars": 6181,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "int",
+        "Customer",
+        "Customer",
+        "Customer",
+        "Customer",
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run",
+        "typecheck"
+      ],
+      "command": "python3 - <<'E'\nimport re\ndef sub(p,a,b):\n    s=open(p).read(); assert a in s,(p,a); open(p,'w').write(s.replace(a,b,1))\nsub('billing/models.py','    tax_exempt: bool\\n    default_payment','    tax_exempt: bool\\n    net_terms_days: int\\n    default_payment')\nc='billing/customers.py'\nsub(c,'from .models import (\\n','from .models import (\\n    INVOICE_NET_DAYS,\\n')\nsub(c,'def create_customer(','''def _validate_net_terms(days: int) -> int:\n    if isinstance(days, bool) or not isinstance(days, int):\n        raise ValidationError(\"net_terms_days must be an integer\")\n    if days < 0:\n        raise ValidationError(\"net_terms_days must not be negative\")\n    return days\n\n\ndef create_customer(''')\nsub(c,'    metadata: dict[str, str] | None = None,\\n) -> Customer:','    metadata: dict[str, str] | None = None,\\n    net_terms_days: int = INVOICE_NET_DAYS,\\n) -> Customer:')\nsub(c,'        \"tax_exempt\": tax_exempt,\\n','        \"tax_exempt\": tax_exempt,\\n        \"net_terms_days\": _validate_net_terms(net_terms_days),\\n')\nsub(c,'    tax_exempt: bool | None = None,\\n) -> Customer:','    tax_exempt: bool | None = None,\\n    net_terms_days: int | None = None,\\n) -> Customer:')\nsub(c,'    emit(ctx, \"customer.updated\"','    if net_terms_days is not None:\\n        customer[\"net_terms_days\"] = _validate_net_terms(net_terms_days)\\n    emit(ctx, \"customer.updated\"')\nsub('billing/serialization.py','        \"tax_exempt\": customer[\"tax_exempt\"],\\n','        \"tax_exempt\": customer[\"tax_exempt\"],\\n        \"net_terms_days\": customer[\"net_terms_days\"],\\n')\nsub('billing/invoices.py','    invoice[\"due_at\"] = EpochSeconds(now + INVOICE_NET_DAYS * SECONDS_PER_DAY)','    net_days = ctx.store.require_customer(invoice[\"customer_id\"])[\"net_terms_days\"]\\n    invoice[\"due_at\"] = EpochSeconds(now + net_days * SECONDS_PER_DAY)')\nsub('billing/api.py','        tax_region=_optional_str(body, \"tax_region\"),\\n    )\\n    return 201, customer_json','        tax_region=_optional_str(body, \"tax_region\"),\\n        net_terms_days=_int(body, \"net_terms_days\", INVOICE_NET_DAYS),\\n    )\\n    return 201, customer_json')\nsub('billing/api.py','from .models import CurrencyCode,','from .models import INVOICE_NET_DAYS, CurrencyCode,')\nE\ngrep -n \"INVOICE_NET_DAYS\" billing/invoices.py; echo '{\"summary\": \"Added per-customer net_terms_days (default 7, negative rejected) to create/update/API and used it for due_at on invoice finalization.\"}' > answer.json\n.venv/bin/python -m pytest -q 2>&1 | tail -5; .venv/bin/python -m mypy billing | tail -5",
+      "output_chars": 167,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "billing/invoices.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit",
+        "read",
+        "test",
+        "typecheck"
+      ],
+      "command": "sed -i '' '11d' billing/invoices.py && .venv/bin/python -m pytest -q | tail -1; .venv/bin/python -m mypy billing | tail -1",
+      "output_chars": 62,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 24.6,
+  "timed_out": false,
+  "exit_code": 0
+}

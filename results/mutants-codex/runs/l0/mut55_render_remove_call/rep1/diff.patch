@@ -1,0 +1,47 @@
+diff --git a/billing/render.py b/billing/render.py
+index 5ba089b..c3f2438 100644
+--- a/billing/render.py
++++ b/billing/render.py
+@@ -41,7 +41,9 @@ def render_invoice(ctx, invoice):
+         rates = sorted({line["tax_rate"] for line in invoice["lines"] if line["tax_amount"]})
+         label = "Tax (" + ", ".join(format_rate(rate) for rate in rates) + ")"
+         inclusive = all(line["tax_inclusive"] for line in invoice["lines"] if line["tax_amount"])
+-        pass
++        if inclusive:
++            label = "Tax included (" + ", ".join(format_rate(rate) for rate in rates) + ")"
++        out.append(_row(label, format_amount(invoice["tax_total"], currency)))
+     out.append(_row("Total", format_amount(invoice["total"], currency)))
+     if invoice["credit_applied"]:
+         out.append(_row("Credit applied", format_amount(-invoice["credit_applied"], currency)))
+diff --git a/tests/test_render.py b/tests/test_render.py
+new file mode 100644
+index 0000000..7d43d01
+--- /dev/null
++++ b/tests/test_render.py
+@@ -0,0 +1,26 @@
++from billing import catalog, tax
++from billing.render import render_invoice
++
++
++def test_render_invoice_shows_exclusive_tax(world):
++    tax.set_tax_rate(world.ctx, "US-CA", 825, "CA")
++    cus = world.customer(region="US-CA")
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    text = render_invoice(world.ctx, inv)
++    assert "Invoice INV-00001" in text
++    assert any("Tax (8.25%)" in line and "$0.82" in line for line in text.splitlines())
++    assert "$10.82" in text
++
++
++def test_render_invoice_shows_inclusive_tax(world):
++    price = catalog.create_price(world.ctx, world.plan["id"], "usd", "flat", unit_amount=1200, tax_inclusive=True)
++    tax.set_tax_rate(world.ctx, "DE", 2000, "VAT")
++    cus = world.customer(region="DE")
++    world.engine.subscribe(cus["id"], [(price["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    text = render_invoice(world.ctx, inv)
++    assert any("Tax included (20%)" in line and "$2.00" in line for line in text.splitlines())
++    assert inv["total"] == 1200

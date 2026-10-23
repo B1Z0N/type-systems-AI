@@ -1,0 +1,28 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+
+
+def test_cancel_policy_marks_uncollectible():
+    from conftest import World
+
+    w = World({"retry_offsets_days": [2], "final_action": "cancel"})
+    cus = w.customer(last4="9995")
+    sub = w.engine.subscribe(cus["id"], [(w.monthly["id"], 1)])
+    w.advance_days(2)
+    [inv] = w.engine.invoices_for(cus["id"])
+    assert inv["status"] == "uncollectible"
+    assert sub["status"] == "canceled"
+```
+
+It fails with:
+
+```
+AssertionError: assert 'open' == 'uncollectible'
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

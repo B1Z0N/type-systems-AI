@@ -1,0 +1,37 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index 44e391f..6d8b206 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -18,6 +18,7 @@ def collect(ctx: Context, invoice_id: InvoiceId) -> Payment | None:
+         return None
+     method = default_payment_method(ctx, invoice["customer_id"])
+     if method is None:
++        record_failure(ctx, invoice, "no_payment_method")
+         return None
+     now = ctx.clock.now()
+     if is_expired(method, now):
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..ca2c454 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,4 +1,5 @@
+ from billing import ledger
++from billing.events import events_of_type
+ from billing.clock import format_date
+ 
+ 
+@@ -55,3 +56,14 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_customer_without_payment_method_enters_dunning(world):
++    cus = world.customer(card=False)
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "open"
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] is not None
++    assert sub["status"] == "past_due"
++    assert len(events_of_type(world.ctx, "invoice.payment_failed")) == 1

@@ -1,0 +1,16 @@
+id: m2_usage_seconds
+category: change
+stratum: type_relevant
+title: Store usage timestamps in seconds
+read_only: false
+relevant_files: [usage.py, api.py, engine.py, clock.py, models.py]
+prompt: |
+  Change usage records to store their `timestamp` in epoch seconds instead of the current
+  unit. Clients must not notice: `usage.report_usage`, `BillingEngine.report_usage` and the
+  `POST /usage` API keep accepting the timestamp in the same unit as today, and the API
+  response keeps returning it in that unit. Billing results must not change.
+answer_schema: |
+  {"summary": "<one sentence>"}
+grader:
+  type: tests
+  task_tests: [tasks/test_m2_usage_seconds.py]

@@ -1,0 +1,14 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 4,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [],
+  "location_correct": true,
+  "answer": {
+    "file": "payments.py",
+    "function": "collect"
+  },
+  "answer_error": null
+}

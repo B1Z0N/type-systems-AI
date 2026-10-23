@@ -1,0 +1,6 @@
+Customers on metered plans are being under-billed: renewal invoices show a quantity of 0
+for metered prices even though usage was reported during the period. Find the root cause
+and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

@@ -1,0 +1,14 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index ea684ca..fd0cdcd 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -39,8 +39,8 @@ def record_failure(ctx: Context, invoice: Invoice, failure_code: str) -> None:
+         return
+     action = policy["final_action"]
+     if action == "cancel":
+-        pass
+         transition(ctx, subscription, "canceled")
++        mark_uncollectible(ctx, invoice["id"])
+     elif action == "pause":
+         transition(ctx, subscription, "paused")
+     else:

@@ -1,0 +1,26 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index 879481e..33c6758 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -8,7 +8,7 @@ from .dunning import DEFAULT_POLICY, due_for_retry
+ class BillingEngine:
+     def __init__(self, clock, gateway, transport, dunning_policy=None, fx=None):
+         self.clock = clock
+-        self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
++        self.ctx = Context(clock, gateway, transport, dunning_policy or DEFAULT_POLICY, fx)
+ 
+     def subscribe(self, customer_id, items, *, trial_days=None, coupon_id=None):
+         """Create a subscription and, unless it starts with a trial, invoice the first period."""
+diff --git a/tests/test_dunning_regression.py b/tests/test_dunning_regression.py
+new file mode 100644
+index 0000000..f6a5600
+--- /dev/null
++++ b/tests/test_dunning_regression.py
+@@ -0,0 +1,7 @@
++def test_customer_without_card_enters_dunning(world):
++    cus = world.customer(card=False)
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] is not None
++    assert sub["status"] == "past_due"

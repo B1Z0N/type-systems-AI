@@ -1,0 +1,50 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 80045f9..a6900fa 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -47,8 +47,8 @@ def records_in_period(
+     period_start: EpochSeconds,
+     period_end: EpochSeconds,
+ ) -> list[UsageRecord]:
+-    start = period_start
+-    end = period_end
++    start = to_millis(period_start)
++    end = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..b9dd940 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,5 @@
+ from billing import ledger
+-from billing.clock import format_date
++from billing.clock import format_date, to_millis
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -55,3 +55,23 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_metered_usage_is_billed_in_the_period_it_was_reported(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    start = to_millis(sub["current_period_start"])
++    end = to_millis(sub["current_period_end"])
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 2, start)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 3, end - 1)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 7, end)
++
++    [first] = world.advance_days(31)
++    [line] = first["lines"]
++    assert line["kind"] == "usage"
++    assert line["quantity"] == 5
++    assert line["amount"] == 10
++
++    [second] = world.advance_days(28)
++    assert second["lines"][0]["quantity"] == 7
++    assert second["lines"][0]["amount"] == 14

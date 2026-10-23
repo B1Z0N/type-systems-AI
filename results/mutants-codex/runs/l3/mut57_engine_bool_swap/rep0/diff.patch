@@ -1,0 +1,46 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index 32f7584..78b9ac1 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -34,7 +34,7 @@ class BillingEngine:
+         fx: RateTable | None = None,
+     ) -> None:
+         self.clock = clock
+-        self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
++        self.ctx = Context(clock, gateway, transport, dunning_policy if dunning_policy is not None else DEFAULT_POLICY, fx)
+ 
+     def subscribe(
+         self,
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..0b85a23 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,6 @@
+ from billing import ledger
+ from billing.clock import format_date
++from billing.engine import BillingEngine
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -13,6 +14,21 @@ def test_subscribe_invoices_and_charges_first_period(world):
+     assert format_date(sub["current_period_end"]) == "2026-02-15"
+ 
+ 
++def test_customer_without_card_enters_dunning(world):
++    cus = world.customer(card=False)
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] is not None
++    assert sub["status"] == "past_due"
++
++
++def test_engine_uses_custom_dunning_policy(world):
++    policy = {"retry_offsets_days": [2], "final_action": "cancel"}
++    engine = BillingEngine(world.clock, world.gateway, world.transport, policy)
++    assert engine.ctx.dunning_policy is policy
++
++
+ def test_trial_converts_and_invoices(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)

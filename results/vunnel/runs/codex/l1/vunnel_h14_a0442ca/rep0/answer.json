@@ -1,0 +1,1 @@
+{"summary": "Oracle Linux fixes now retain architecture when versions differ and share arch-less entries when fixes are common across architectures."}

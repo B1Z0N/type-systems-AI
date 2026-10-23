@@ -1,0 +1,46 @@
+diff --git a/src/vunnel/providers/__init__.py b/src/vunnel/providers/__init__.py
+index ab937c2..dae7587 100644
+--- a/src/vunnel/providers/__init__.py
++++ b/src/vunnel/providers/__init__.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
++import enum
+ import logging
++import os
+ from importlib.metadata import entry_points
+ 
+ from vunnel.providers import (
+@@ -80,9 +82,30 @@ def versions():
+     return {n: p.version() for (n, p) in _providers.items()}
+ 
+ 
+-def register(name, cls):
++class PluginOverrideMode(enum.Enum):
++    FAIL = "fail"
++    REPLACE = "replace"
++    IGNORE = "ignore"
++
++    @classmethod
++    def from_env(cls) -> PluginOverrideMode:
++        value = os.environ.get("VUNNEL_PLUGIN_OVERRIDE_MODE", "").strip().lower()
++        try:
++            return cls(value)
++        except ValueError:
++            return cls.FAIL
++
++
++def register(name, cls, mode=None):
++    if mode is None:
++        mode = PluginOverrideMode.from_env()
+     if name in _providers and _providers[name] != cls:
+-        raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode == PluginOverrideMode.IGNORE:
++            logging.debug(f"provider {name!r} already registered, ignoring plugin class {cls!r}")
++            return
++        if mode == PluginOverrideMode.FAIL:
++            raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        logging.debug(f"replacing provider {name!r} with plugin class {cls!r}")
+     _providers[name] = cls
+ 
+ 

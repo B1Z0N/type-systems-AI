@@ -1,0 +1,16 @@
+id: n5_updated_emitters
+category: list
+stratum: type_neutral
+title: Who emits subscription.updated (grep-able control)
+read_only: true
+relevant_files: [subscriptions.py, events.py]
+prompt: |
+  A downstream consumer is flooded by `subscription.updated` webhooks. List every function in
+  the `billing` package whose own code emits that event type (not callers further up).
+  Name functions as `module.function` (methods as `module.Class.method`).
+answer_schema: |
+  {"functions": ["<module.function>", ...]}
+grader:
+  type: sets
+  expected:
+    functions: {auto: subscription_updated_emitters}

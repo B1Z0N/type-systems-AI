@@ -1,0 +1,31 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+import pytest
+from billing.errors import InvalidStateError
+
+
+def test_full_refund(world):
+    cus = world.customer()
+    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+    [inv] = world.engine.invoices_for(cus["id"])
+    note = world.engine.refund(inv["id"])
+    assert note["amount"] == 1000
+    assert world.gateway.refunds == [("ch_000001", 1000)]
+    [payment] = world.ctx.store.payments_for_invoice(inv["id"])
+    assert payment["status"] == "refunded"
+    with pytest.raises(InvalidStateError):
+        world.engine.refund(inv["id"])
+```
+
+It fails with:
+
+```
+AssertionError: assert 'succeeded' == 'refunded'
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

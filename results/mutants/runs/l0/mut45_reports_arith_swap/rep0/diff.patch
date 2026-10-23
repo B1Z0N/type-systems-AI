@@ -1,0 +1,28 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index 465f58d..222f548 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -39,7 +39,7 @@ def revenue_between(ctx, start, end):
+         if paid_at is None or not start <= paid_at < end:
+             continue
+         credited = sum(note["amount"] for note in ctx.store.credit_notes_for(invoice["id"]))
+-        net = invoice["amount_paid"] + credited
++        net = invoice["amount_paid"] - credited
+         currency = invoice["currency"]
+         totals[currency] = totals.get(currency, 0) + net
+     return totals
+diff --git a/tests/test_reports_credit.py b/tests/test_reports_credit.py
+new file mode 100644
+index 0000000..d420cf5
+--- /dev/null
++++ b/tests/test_reports_credit.py
+@@ -0,0 +1,9 @@
++from billing import reports
++
++
++def test_revenue_between_nets_credit_notes(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    world.engine.refund(inv["id"])
++    assert reports.revenue_between(world.ctx, inv["paid_at"], inv["paid_at"] + 1) == {"usd": 0}

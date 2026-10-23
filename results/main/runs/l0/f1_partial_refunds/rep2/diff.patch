@@ -1,0 +1,120 @@
+diff --git a/billing/api.py b/billing/api.py
+index 4ffbaf0..1d65cdb 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -85,7 +85,8 @@ def get_invoice_text(engine, params, _):
+ 
+ 
+ def refund_invoice(engine, params, body):
+-    note = engine.refund(params[0], _optional_str(body, "reason") or "requested_by_customer")
++    amount = _int(body, "amount") if body.get("amount") is not None else None
++    note = engine.refund(params[0], _optional_str(body, "reason") or "requested_by_customer", amount=amount)
+     return 200, {"credit_note": note["id"], "amount": note["amount"]}
+ 
+ 
+diff --git a/billing/engine.py b/billing/engine.py
+index 33c6758..d74b14f 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -86,8 +86,8 @@ class BillingEngine:
+     def pay(self, invoice_id):
+         return payments.collect(self.ctx, invoice_id)
+ 
+-    def refund(self, invoice_id, reason="requested_by_customer"):
+-        return refunds.refund_invoice(self.ctx, invoice_id, reason)
++    def refund(self, invoice_id, reason="requested_by_customer", amount=None):
++        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)
+ 
+     def invoices_for(self, customer_id):
+         return sorted(self.ctx.store.invoices_for(customer_id), key=lambda inv: (inv["created_at"], inv["id"]))
+diff --git a/billing/refunds.py b/billing/refunds.py
+index eaf3a3d..fc367be 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -31,31 +31,69 @@ def credited_total(ctx, invoice_id):
+     return sum(note["amount"] for note in ctx.store.credit_notes_for(invoice_id))
+ 
+ 
+-def refund_invoice(ctx, invoice_id, reason="requested_by_customer"):
+-    """Refund everything that was paid on an invoice back to the original payment method."""
++def _refundable_payments(ctx, invoice_id):
++    return [
++        payment
++        for payment in successful_payments(ctx, invoice_id)
++        if payment["gateway_ref"] is not None and payment["amount"] - payment["refunded_amount"] > 0
++    ]
++
++
++def _refundable_money(ctx, invoice_id, payments):
++    """Money still refundable: unrefunded payments, less account credit already issued on the invoice."""
++    remaining = sum(payment["amount"] - payment["refunded_amount"] for payment in payments)
++    credits = sum(note["amount"] for note in ctx.store.credit_notes_for(invoice_id) if not note["refunded"])
++    return max(0, remaining - credits)
++
++
++def _credit_returned(ctx, invoice):
++    return any(
++        entry["reason"] == "refund" and entry["invoice_id"] == invoice["id"]
++        for entry in ctx.store.ledger_for(invoice["customer_id"])
++    )
++
++
++def refund_invoice(ctx, invoice_id, reason="requested_by_customer", amount=None):
++    """Refund money paid on an invoice to the original payment method.
++
++    Without an amount, refunds everything still refundable and returns applied account credit.
++    With an amount (minor units), refunds that much, oldest successful payments first.
++    """
+     invoice = ctx.store.require_invoice(invoice_id)
+     if invoice["status"] != "paid":
+         raise InvalidStateError("only paid invoices can be refunded")
+-    if credited_total(ctx, invoice_id) > 0:
+-        raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(ctx, invoice["id"])
++    payments = _refundable_payments(ctx, invoice_id)
++    available = _refundable_money(ctx, invoice_id, payments)
++    return_credit = amount is None and invoice["credit_applied"] > 0 and not _credit_returned(ctx, invoice)
++    if amount is None:
++        to_refund = available
++        if to_refund == 0 and not return_credit:
++            raise InvalidStateError("invoice has nothing left to refund")
++    else:
++        if isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0:
++            raise ValidationError("refund amount must be a positive integer")
++        if available == 0:
++            raise InvalidStateError("invoice has nothing left to refund")
++        if amount > available:
++            raise ValidationError(f"cannot refund more than {available} on this invoice")
++        to_refund = amount
+     refunded = 0
+     for payment in payments:
+-        remaining = payment["amount"] - payment["refunded_amount"]
+-        if remaining <= 0 or payment["gateway_ref"] is None:
+-            continue
+-        result = ctx.gateway.refund(payment["gateway_ref"], remaining)
++        if refunded >= to_refund:
++            break
++        take = min(to_refund - refunded, payment["amount"] - payment["refunded_amount"])
++        result = ctx.gateway.refund(payment["gateway_ref"], take)
+         if not result["ok"]:
+             raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+-        payment["refunded_amount"] = payment["refunded_amount"] + remaining
+-        payment["status"] = "refunded"
+-        refunded = refunded + remaining
++        payment["refunded_amount"] = payment["refunded_amount"] + take
++        payment["status"] = "refunded" if payment["refunded_amount"] >= payment["amount"] else "partially_refunded"
++        refunded = refunded + take
+         emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+-    if invoice["credit_applied"] > 0:
+-        add_entry(ctx, invoice["customer_id"], invoice["credit_applied"], "refund", invoice["id"])
+-    if refunded == 0 and invoice["credit_applied"] == 0:
+-        raise InvalidStateError("invoice has no successful payment to refund")
+-    return _credit_note(ctx, invoice_id, refunded + invoice["credit_applied"], reason, True)
++    credit_back = 0
++    if return_credit:
++        credit_back = invoice["credit_applied"]
++        add_entry(ctx, invoice["customer_id"], credit_back, "refund", invoice["id"])
++    return _credit_note(ctx, invoice_id, refunded + credit_back, reason, True)
+ 
+ 
+ def credit_invoice(ctx, invoice_id, amount, reason):

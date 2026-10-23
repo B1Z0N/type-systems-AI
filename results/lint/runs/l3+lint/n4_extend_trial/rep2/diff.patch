@@ -1,0 +1,63 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index e0ff3b2..abf1b85 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -160,6 +160,25 @@ def change_items(
+     return subscription
+ 
+ 
++def extend_trial(ctx: Context, subscription_id: SubscriptionId, days: int) -> Subscription:
++    """Push a trialing subscription's trial end (and period end) later by whole days."""
++    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    if subscription["status"] != "trialing":
++        raise InvalidStateError(f"cannot extend the trial of a {subscription['status']} subscription")
++    delta = days * SECONDS_PER_DAY
++    trial_end = subscription["trial_end"]
++    subscription["trial_end"] = EpochSeconds((trial_end if trial_end is not None else subscription["current_period_end"]) + delta)
++    subscription["current_period_end"] = EpochSeconds(subscription["current_period_end"] + delta)
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def cancel(ctx: Context, subscription_id: SubscriptionId, *, at_period_end: bool = True) -> Subscription:
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] == "canceled":
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..267dc90 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,28 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_extend_trial_delays_billing(world):
++    import pytest
++
++    from billing import subscriptions
++    from billing.errors import InvalidStateError, ValidationError
++
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    trial_end, period_end = sub["trial_end"], sub["current_period_end"]
++    subscriptions.extend_trial(world.ctx, sub["id"], 7)
++    assert sub["trial_end"] == trial_end + 7 * 86_400
++    assert sub["current_period_end"] == period_end + 7 * 86_400
++    world.advance_days(14)
++    assert sub["status"] == "trialing"
++    assert world.engine.invoices_for(cus["id"]) == []
++    world.advance_days(7)
++    assert sub["status"] == "active"
++    assert len(world.engine.invoices_for(cus["id"])) == 1
++    for bad in (0, -1, 1.5, True):
++        with pytest.raises(ValidationError):
++            subscriptions.extend_trial(world.ctx, sub["id"], bad)
++    with pytest.raises(InvalidStateError):
++        subscriptions.extend_trial(world.ctx, sub["id"], 1)

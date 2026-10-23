@@ -1,0 +1,184 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 7,
+  "duration_ms": 25666,
+  "api_duration_ms": 24612,
+  "cost_usd": 0.08561830000000001,
+  "input_tokens": 14,
+  "output_tokens": 2781,
+  "cache_read_tokens": 85883,
+  "cache_write_tokens": 12298,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 98195,
+  "tool_calls": 6,
+  "tool_calls_by_kind": {
+    "read": 3,
+    "edit": 3
+  },
+  "reads": 3,
+  "searches": 0,
+  "edits": 3,
+  "test_runs": 2,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "customers.py",
+    "invoices.py",
+    "serialization.py"
+  ],
+  "files_edited": [
+    "api.py",
+    "invoices.py"
+  ],
+  "unique_files_edited": 2,
+  "unique_files_read": 4,
+  "rereads": 1,
+  "read_chars": 13091,
+  "search_chars": 0,
+  "tool_output_chars": 14624,
+  "relevant_files_read": 3,
+  "exploration_precision": 0.75,
+  "exploration_recall": 0.6,
+  "steps_before_first_edit": 3,
+  "final_message": "Customers now have a `net_terms_days` setting (default 7), and finalizing an invoice sets `due_at` from the customer's current value. The existing 24 tests pass. I didn't add new tests for the feature, so negative values, `update_customer` and the API body aren't exercised.\n\n- **Create and update:** `create_customer(..., net_terms_days=...)` and `update_customer(..., net_terms_days=...)` both accept it. A negative value, a non-integer or a bool raises `ValidationError`. On update, the value is checked before any field is changed.\n- **API:** `POST /customers` reads `net_terms_days` from the body, defaulting to 7. A bad value returns 400 through the existing `ValidationError` handling.\n- **Finalize:** `finalize` in `billing/invoices.py` looks up the customer at that moment, so a later change only affects invoices finalized afterwards.\n- **Response:** I also added `net_terms_days` to the customer JSON, so API responses and webhook payloads include it.\n\nI wrote `answer.json` in the repo root with the one-sentence summary.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "src/*/customers.py"
+      ],
+      "read_paths": [
+        "src/*/customers.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && cat src/*/customers.py && grep -rn \"7\\|due_at\\|create_customer\" --include=*.py . --exclude-dir=.venv --exclude-dir=tests | grep -v \"^./src/.*/customers.py\"",
+      "output_chars": 832,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "customers.py"
+      ],
+      "read_paths": [
+        "customers.py"
+      ],
+      "kinds": [
+        "other",
+        "read",
+        "search"
+      ],
+      "command": "cd /tmp/bsvc-pgkky20b/billing-service/billing && cat customers.py; grep -n \"due_at\\|days=\\|DUE\\|customer\" invoices.py api.py models.py serialization.py store.py | head -80",
+      "output_chars": 9195,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "invoices.py",
+        "api.py",
+        "serialization.py"
+      ],
+      "read_paths": [
+        "invoices.py",
+        "api.py",
+        "serialization.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "sed -n 240,255p invoices.py; grep -n \"INVOICE_NET_DAYS\" *.py; sed -n 45,62p api.py; grep -n \"_int\\b\\|def _\" api.py | head -20; sed -n 8,25p serialization.py; grep -n -B3 -A14 \"class Customer\" models.py",
+      "output_chars": 3064,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "api.py",
+        "Customer",
+        "Customer",
+        "Customer",
+        "Customer",
+        "None"
+      ],
+      "read_paths": [
+        "api.py"
+      ],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run",
+        "search"
+      ],
+      "command": "python3 - <<'E'\nimport re\ndef sub(f,a,b):\n    s=open(f).read(); assert a in s,(f,a); open(f,'w').write(s.replace(a,b,1))\nsub('models.py','    tax_exempt: bool\\n    default_payment_method','    tax_exempt: bool\\n    net_terms_days: int\\n    default_payment_method')\nsub('customers.py','    metadata: dict[str, str] | None = None,\\n) -> Customer:\\n','    metadata: dict[str, str] | None = None,\\n    net_terms_days: int = INVOICE_NET_DAYS,\\n) -> Customer:\\n')\nsub('customers.py','        raise ValidationError(f\"unsupported currency: {currency}\")\\n','        raise ValidationError(f\"unsupported currency: {currency}\")\\n    _validate_net_terms(net_terms_days)\\n')\nsub('customers.py','        \"default_payment_method\": None,','        \"net_terms_days\": net_terms_days,\\n        \"default_payment_method\": None,')\nsub('customers.py','    tax_exempt: bool | None = None,\\n) -> Customer:','    tax_exempt: bool | None = None,\\n    net_terms_days: int | None = None,\\n) -> Customer:')\nsub('customers.py','    customer = ctx.store.require_customer(customer_id)\\n    if email is not None:','    customer = ctx.store.require_customer(customer_id)\\n    if net_terms_days is not None:\\n        _validate_net_terms(net_terms_days)\\n    if email is not None:')\nsub('customers.py','    emit(ctx, \"customer.updated\"','    if net_terms_days is not None:\\n        customer[\"net_terms_days\"] = net_terms_days\\n    emit(ctx, \"customer.updated\"')\nsub('customers.py','def create_customer(','''def _validate_net_terms(days: int) -> None:\n    if isinstance(days, bool) or not isinstance(days, int) or days < 0:\n        raise ValidationError(\"net_terms_days must be a non-negative integer\")\n\n\ndef create_customer(''')\nsub('customers.py','    DEFAULT_CURRENCY,\\n','    DEFAULT_CURRENCY,\\n    INVOICE_NET_DAYS,\\n')\nsub('serialization.py','        \"tax_exempt\": customer[\"tax_exempt\"],\\n','        \"tax_exempt\": customer[\"tax_exempt\"],\\n        \"net_terms_days\": customer[\"net_terms_days\"],\\n')\nsub('api.py','        tax_region=_optional_str(body, \"tax_region\"),\\n    )\\n    return 201, customer_json','        tax_region=_optional_str(body, \"tax_region\"),\\n        net_terms_days=_int(body, \"net_terms_days\", INVOICE_NET_DAYS),\\n    )\\n    return 201, customer_json')\nsub('invoices.py','    invoice[\"due_at\"] = EpochSeconds(now + INVOICE_NET_DAYS *','    customer = ctx.store.require_customer(invoice[\"customer_id\"])\\n    invoice[\"due_at\"] = EpochSeconds(now + customer[\"net_terms_days\"] *')\nE\nsed -n 1,16p api.py; sed -n 33,39p api.py; grep -n INVOICE_NET invoices.py",
+      "output_chars": 857,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "billing/invoices.py",
+        "billing/api.py",
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "search",
+        "test"
+      ],
+      "command": "cd /tmp/bsvc-pgkky20b/billing-service && sed -i '/^    INVOICE_NET_DAYS,$/d' billing/invoices.py && sed -i 's/^from .models import CurrencyCode, CustomerId,/from .models import INVOICE_NET_DAYS, CurrencyCode, CustomerId,/' billing/api.py && grep -rn '\"tax_exempt\"' billing tests | grep -v \"customers.py\\|serialization\"; echo '{\"summary\": \"Added per-customer net_terms_days (default 7, validated non-negative) to create/update/API/serialization, and finalize now uses the customer'\"'\"'s term for due_at.\"}' > answer.json; .venv/bin/python -m pytest -q 2>&1 | tail -5",
+      "output_chars": 289,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "billing/invoices.py",
+        "billing/api.py",
+        "answer.json"
+      ],
+      "read_paths": [
+        "answer.json"
+      ],
+      "kinds": [
+        "edit",
+        "read",
+        "test",
+        "vcs"
+      ],
+      "command": "sed -i '' '/^    INVOICE_NET_DAYS,$/d' billing/invoices.py && sed -i '' 's/^from .models import CurrencyCode, CustomerId,/from .models import INVOICE_NET_DAYS, CurrencyCode, CustomerId,/' billing/api.py && .venv/bin/python -m pytest -q 2>&1 | tail -5; cat answer.json; git status --short",
+      "output_chars": 387,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 26.5,
+  "timed_out": false,
+  "exit_code": 0
+}

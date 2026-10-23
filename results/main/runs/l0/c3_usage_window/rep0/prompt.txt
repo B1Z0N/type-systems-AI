@@ -1,0 +1,12 @@
+I'm integrating a client that reports metered usage. Answer from the code:
+
+1. In what unit must the usage `timestamp` be given?
+2. Is a usage record whose timestamp equals the exact start of a billing period counted
+   in that period? What about one exactly at the period end?
+3. Is metered usage billed in advance (on the invoice that opens the period) or in arrears
+   (on the invoice after the period ends)?
+
+Do not modify any files other than `answer.json`. When you are done, write your final answer as JSON to `answer.json` in the repository root, using exactly this shape:
+{"timestamp_unit": "seconds" | "milliseconds" | "microseconds",
+ "start_inclusive": <bool>, "end_inclusive": <bool>,
+ "billing_timing": "in_advance" | "in_arrears"}

@@ -1,0 +1,7 @@
+Change usage records to store their `timestamp` in epoch seconds instead of the current
+unit. Clients must not notice: `usage.report_usage`, `BillingEngine.report_usage` and the
+`POST /usage` API keep accepting the timestamp in the same unit as today, and the API
+response keeps returning it in that unit. Billing results must not change.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

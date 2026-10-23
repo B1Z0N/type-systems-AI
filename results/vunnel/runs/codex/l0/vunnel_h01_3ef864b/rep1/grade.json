@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 10,
+  "target_total": 10,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Made Chainguard library version markers configurable for pypi, maven, npm, and golang with per-key overrides, disablement, and validation."
+  },
+  "answer_error": null
+}

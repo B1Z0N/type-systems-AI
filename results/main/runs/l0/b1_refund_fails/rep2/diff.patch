@@ -1,0 +1,13 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index 9866d4c..1217a75 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -38,7 +38,7 @@ def refund_invoice(ctx, invoice_id, reason="requested_by_customer"):
+         raise InvalidStateError("only paid invoices can be refunded")
+     if credited_total(ctx, invoice_id) > 0:
+         raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(ctx, invoice["customer_id"])
++    payments = successful_payments(ctx, invoice_id)
+     refunded = 0
+     for payment in payments:
+         remaining = payment["amount"] - payment["refunded_amount"]

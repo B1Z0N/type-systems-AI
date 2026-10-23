@@ -1,0 +1,1 @@
+{"summary": "Fixed Wolfi and Chainguard secdb parsing for non-CVE and non-GHSA vulnerability IDs by retaining the distro security reference link."}

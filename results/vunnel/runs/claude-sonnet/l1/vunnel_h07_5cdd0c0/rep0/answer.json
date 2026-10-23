@@ -1,0 +1,1 @@
+{"summary": "Wolfi/chainguard build_reference_links no longer crashes on non-CVE/GHSA ids and falls back to the distro security page URL."}

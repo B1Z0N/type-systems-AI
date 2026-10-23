@@ -1,0 +1,53 @@
+diff --git a/billing/api.py b/billing/api.py
+index 4ffbaf0..cfefbc2 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -1,6 +1,7 @@
+ """JSON request handling for the public billing API."""
+ 
+ from . import customers, invoices
++from .clock import to_millis
+ from .errors import BillingError, NotFoundError, ValidationError
+ from .render import render_invoice
+ from .serialization import customer_json, invoice_json, subscription_json
+@@ -71,7 +72,7 @@ def report_usage(engine, _, body):
+         timestamp,
+         _optional_str(body, "idempotency_key"),
+     )
+-    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp"]}
++    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": to_millis(record["timestamp"])}
+ 
+ 
+ def get_invoice(engine, params, _):
+diff --git a/billing/usage.py b/billing/usage.py
+index 57987e0..39ba43b 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_seconds
+ from .errors import ValidationError
+ 
+ 
+@@ -22,7 +22,7 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": to_seconds(timestamp) if timestamp is not None else ctx.clock.now(),
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+@@ -32,8 +32,8 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+-    start = to_millis(period_start)
+-    end = to_millis(period_end)
++    start = period_start
++    end = period_end
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
+     ]

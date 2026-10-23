@@ -1,0 +1,1 @@
+{"summary": "Guard wolfi/chainguard build_reference_links against None for non-CVE/GHSA ids so they fall back to the distro security page link."}

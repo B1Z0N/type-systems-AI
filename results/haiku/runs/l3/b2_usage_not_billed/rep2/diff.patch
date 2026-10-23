@@ -1,0 +1,60 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 80045f9..a14fa61 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .context import Context
+ from .errors import ValidationError
+ from .models import EpochMillis, EpochSeconds, PriceId, SubscriptionId, UsageRecord
+@@ -50,7 +50,9 @@ def records_in_period(
+     start = period_start
+     end = period_end
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if start <= to_seconds(record["timestamp"]) < end
+     ]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 
+diff --git a/tests/test_usage.py b/tests/test_usage.py
+new file mode 100644
+index 0000000..174b1ec
+--- /dev/null
++++ b/tests/test_usage.py
+@@ -0,0 +1,31 @@
++from billing.clock import to_millis
++from tests.conftest import World
++
++
++def test_metered_usage_is_billed_in_arrears_for_the_period():
++    world = World()
++    customer = world.customer()
++    subscription = world.engine.subscribe(customer["id"], [(world.api_calls["id"], 1)])
++    world.engine.report_usage(subscription["id"], world.api_calls["id"], 5)
++    world.engine.report_usage(subscription["id"], world.api_calls["id"], 7)
++
++    invoices = world.advance_days(31)
++
++    usage_lines = [line for invoice in invoices for line in invoice["lines"] if line["kind"] == "usage"]
++    assert [line["quantity"] for line in usage_lines] == [12]
++    assert usage_lines[0]["amount"] == 24
++
++
++def test_usage_timestamps_in_milliseconds_are_matched_against_period_seconds():
++    world = World()
++    customer = world.customer()
++    subscription = world.engine.subscribe(customer["id"], [(world.api_calls["id"], 1)])
++    inside = subscription["current_period_start"] + 60
++    world.engine.report_usage(
++        subscription["id"], world.api_calls["id"], 3, timestamp=to_millis(inside)
++    )
++
++    invoices = world.advance_days(31)
++
++    usage_lines = [line for invoice in invoices for line in invoice["lines"] if line["kind"] == "usage"]
++    assert [line["quantity"] for line in usage_lines] == [3]

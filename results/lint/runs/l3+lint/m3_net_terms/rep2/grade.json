@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added a per-customer net_terms_days setting (default 7, must be non-negative) to create_customer, update_customer and POST /customers, and finalize now computes due_at from the customer's current term."
+  },
+  "answer_error": null
+}

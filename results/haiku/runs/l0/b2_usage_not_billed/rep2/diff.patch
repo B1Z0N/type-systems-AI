@@ -1,0 +1,56 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 791e8ec..c7833de 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .errors import ValidationError
+ 
+ 
+@@ -35,7 +35,9 @@ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     start = period_start
+     end = period_end
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if start <= to_seconds(record["timestamp"]) < end
+     ]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 
+diff --git a/tests/test_usage.py b/tests/test_usage.py
+new file mode 100644
+index 0000000..b09ab24
+--- /dev/null
++++ b/tests/test_usage.py
+@@ -0,0 +1,27 @@
++from billing import usage
++from billing.clock import to_millis
++
++
++def test_metered_usage_is_billed_on_renewal(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 1)])
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 10)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 5)
++
++    summary = usage.usage_summary(world.ctx, sub["id"], sub["current_period_start"], sub["current_period_end"])
++    assert summary == {world.api_calls["id"]: 15}
++
++    invoices = world.advance_days(31)
++    usage_lines = [line for inv in invoices for line in inv["lines"] if line["kind"] == "usage"]
++    assert [(line["quantity"], line["amount"]) for line in usage_lines] == [(15, 30)]
++
++
++def test_usage_outside_period_is_excluded(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 1)])
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 99, timestamp=to_millis(sub["current_period_end"]))
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 4, timestamp=to_millis(sub["current_period_start"]))
++
++    assert usage.aggregate_usage(
++        world.ctx, sub["id"], world.api_calls["id"], sub["current_period_start"], sub["current_period_end"]
++    ) == 4

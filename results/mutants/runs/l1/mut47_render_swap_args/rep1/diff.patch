@@ -1,0 +1,33 @@
+diff --git a/billing/render.py b/billing/render.py
+index 4830a5c..ebe698b 100644
+--- a/billing/render.py
++++ b/billing/render.py
+@@ -48,7 +48,7 @@ def render_invoice(ctx: Context, invoice: dict) -> str:
+         out.append(_row("Credit applied", format_amount(-invoice["credit_applied"], currency)))
+     if invoice["amount_paid"]:
+         out.append(_row("Paid", format_amount(-invoice["amount_paid"], currency)))
+-    out.append(_row("Amount due", format_amount(currency, invoice["amount_due"])))
++    out.append(_row("Amount due", format_amount(invoice["amount_due"], currency)))
+     return "\n".join(out)
+ 
+ 
+diff --git a/tests/test_render_invoice.py b/tests/test_render_invoice.py
+new file mode 100644
+index 0000000..ab0b63b
+--- /dev/null
++++ b/tests/test_render_invoice.py
+@@ -0,0 +1,14 @@
++from billing.render import render_invoice
++
++
++def test_render_invoice(world):
++    from billing import tax
++
++    tax.set_tax_rate(world.ctx, "US-CA", 825, "CA")
++    cus = world.customer(region="US-CA")
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    text = render_invoice(world.ctx, inv)
++    assert "Invoice INV-00001" in text
++    assert "Tax (8.25%)" in text
++    assert "$10.82" in text

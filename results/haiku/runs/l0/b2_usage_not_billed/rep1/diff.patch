@@ -1,0 +1,47 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 791e8ec..c7833de 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .errors import ValidationError
+ 
+ 
+@@ -35,7 +35,9 @@ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     start = period_start
+     end = period_end
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if start <= to_seconds(record["timestamp"]) < end
+     ]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 
+diff --git a/tests/test_webhooks_reports_api.py b/tests/test_webhooks_reports_api.py
+index b4b87fb..1fabe3e 100644
+--- a/tests/test_webhooks_reports_api.py
++++ b/tests/test_webhooks_reports_api.py
+@@ -55,3 +55,19 @@ def test_api_round_trip(world):
+     status, err = handle(world.engine, "GET", "/invoices/in_999999")
+     assert status == 404
+     assert handle(world.engine, "POST", "/usage", {"subscription": sub["id"]})[0] == 400
++
++
++def test_metered_usage_billed_on_renewal(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1), (world.api_calls["id"], 0)])
++    sub = world.ctx.store.require_subscription(sub["id"])
++    now = world.clock.now()
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 3, timestamp=(now + 60) * 1000)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 4, timestamp=(now + 120) * 1000)
++    world.clock.set(sub["current_period_end"])
++    world.engine.run_cycle()
++    invoice = world.ctx.store.invoices_for_subscription(sub["id"])[-1]
++    usage_lines = [line for line in invoice["lines"] if line["kind"] == "usage"]
++    assert len(usage_lines) == 1
++    assert usage_lines[0]["quantity"] == 7
++    assert usage_lines[0]["amount"] == 14

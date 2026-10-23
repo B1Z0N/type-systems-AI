@@ -1,0 +1,16 @@
+{
+  "score": 0.0,
+  "passed": false,
+  "target_passed": 0,
+  "target_total": 1,
+  "regressions": [],
+  "failed_targets": [
+    "base/test_dunning_refunds.py::test_customer_without_card_enters_dunning"
+  ],
+  "location_correct": true,
+  "answer": {
+    "file": "payments.py",
+    "function": "collect"
+  },
+  "answer_error": null
+}

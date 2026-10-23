@@ -1,0 +1,38 @@
+diff --git a/billing/render.py b/billing/render.py
+index ede47e0..f3e0311 100644
+--- a/billing/render.py
++++ b/billing/render.py
+@@ -48,7 +48,7 @@ def render_invoice(ctx: Context, invoice: Invoice) -> str:
+         out.append(_row("Credit applied", format_amount(Cents(-invoice["credit_applied"]), currency)))
+     if invoice["amount_paid"]:
+         out.append(_row("Paid", format_amount(Cents(-invoice["amount_paid"]), currency)))
+-    out.append(_row("Amount due", format_amount(currency, invoice["amount_due"])))
++    out.append(_row("Amount due", format_amount(invoice["amount_due"], currency)))
+     return "\n".join(out)
+ 
+ 
+diff --git a/tests/test_discounts_tax.py b/tests/test_discounts_tax.py
+index 3dcbd8f..59c27c1 100644
+--- a/tests/test_discounts_tax.py
++++ b/tests/test_discounts_tax.py
+@@ -1,4 +1,5 @@
+ from billing import discounts, tax
++from billing.render import render_invoice
+ 
+ 
+ def test_amount_off_allocated_across_lines(world):
+@@ -40,3 +41,14 @@ def test_region_fallback_and_exempt(world):
+     assert tax.rate_for_customer(world.ctx, cus) == 0
+     nobody = world.customer(region=None, email="b@example.com")
+     assert tax.rate_for_customer(world.ctx, nobody) == 0
++
++
++def test_render_invoice(world):
++    tax.set_tax_rate(world.ctx, "US-CA", 825, "CA")
++    cus = world.customer(region="US-CA")
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    text = render_invoice(world.ctx, inv)
++    assert "Invoice INV-00001" in text
++    assert "Tax (8.25%)" in text
++    assert "$10.82" in text

@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds (plus a sub-second ms remainder so ordering and the API response stay identical), with report_usage, BillingEngine.report_usage and POST /usage still using milliseconds."}

@@ -1,0 +1,192 @@
+diff --git a/billing/api.py b/billing/api.py
+index 530f179..223a438 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -94,7 +94,8 @@ def get_invoice_text(engine, params, _):
+ 
+ 
+ def refund_invoice(engine, params, body):
+-    note = engine.refund(params[0], _optional_str(body, "reason") or "requested_by_customer")
++    amount = _int(body, "amount") if "amount" in body else None
++    note = engine.refund(params[0], _optional_str(body, "reason") or "requested_by_customer", amount)
+     return 200, {"credit_note": note["id"], "amount": note["amount"]}
+ 
+ 
+diff --git a/billing/engine.py b/billing/engine.py
+index 0def76d..62d8379 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -107,9 +107,9 @@ class BillingEngine:
+         """Try to collect an open invoice now; returns the payment, if one was attempted."""
+         return payments.collect(self.ctx, invoice_id)
+ 
+-    def refund(self, invoice_id, reason="requested_by_customer"):
+-        """Fully refund a paid invoice and return the credit note."""
+-        return refunds.refund_invoice(self.ctx, invoice_id, reason)
++    def refund(self, invoice_id, reason="requested_by_customer", amount=None):
++        """Refund some or all of a paid invoice and return the credit note."""
++        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)
+ 
+     def invoices_for(self, customer_id):
+         """The customer's invoices, oldest first."""
+diff --git a/billing/refunds.py b/billing/refunds.py
+index eeb5db2..cde46f4 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -37,37 +37,52 @@ def credited_total(ctx, invoice_id):
+     return sum(note["amount"] for note in ctx.store.credit_notes_for(invoice_id))
+ 
+ 
+-def refund_invoice(ctx, invoice_id, reason="requested_by_customer"):
+-    """Refund everything that was paid on an invoice back to the original payment method.
++def refund_invoice(ctx, invoice_id, reason="requested_by_customer", amount=None):
++    """Refund `amount` of captured money, or all remaining money and applied credit.
+ 
+-    Account credit that was applied to the invoice is returned to the ledger rather than
+-    the card. Returns the credit note covering both. Raises InvalidStateError if the
+-    invoice is not paid, was already credited, has nothing to refund, or the gateway
+-    refuses a refund (payments refunded before that point stay refunded).
++    Payments are refunded oldest first. A full refund returns applied account credit
++    to the ledger once. Gateway refunds completed before a refusal stay refunded.
+     """
+     invoice = ctx.store.require_invoice(invoice_id)
+     if invoice["status"] != "paid":
+         raise InvalidStateError("only paid invoices can be refunded")
+-    if credited_total(ctx, invoice_id) > 0:
+-        raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(ctx, invoice["id"])
++    if any(not note["refunded"] for note in ctx.store.credit_notes_for(invoice_id)):
++        raise InvalidStateError("invoice has already been credited")
++    if amount is not None and (isinstance(amount, bool) or not isinstance(amount, int) or amount <= 0):
++        raise ValidationError("refund amount must be a positive integer")
++    payments = sorted(successful_payments(ctx, invoice_id), key=lambda payment: payment["created_at"])
++    refundable_total = sum(
++        payment["amount"] - payment["refunded_amount"]
++        for payment in payments
++        if payment["gateway_ref"] is not None
++    )
++    credit_returned = any(
++        entry["invoice_id"] == invoice_id and entry["reason"] == "refund"
++        for entry in ctx.store.ledger_for(invoice["customer_id"])
++    )
++    credit_remaining = 0 if credit_returned else invoice["credit_applied"]
++    if refundable_total == 0 and credit_remaining == 0:
++        raise InvalidStateError("invoice has no successful payment to refund")
++    if amount is not None:
++        if amount > refundable_total:
++            raise ValidationError(f"cannot refund more than {refundable_total} on this invoice")
++    remaining = refundable_total if amount is None else amount
+     refunded_total = 0
+     for payment in payments:
+-        refundable_amount = payment["amount"] - payment["refunded_amount"]
++        refundable_amount = min(remaining, payment["amount"] - payment["refunded_amount"])
+         if refundable_amount <= 0 or payment["gateway_ref"] is None:
+             continue
+         result = ctx.gateway.refund(payment["gateway_ref"], refundable_amount)
+         if not result["ok"]:
+             raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+-        payment["refunded_amount"] = payment["refunded_amount"] + refundable_amount
+-        payment["status"] = "refunded"
++        payment["refunded_amount"] += refundable_amount
++        payment["status"] = "refunded" if payment["refunded_amount"] == payment["amount"] else "partially_refunded"
+         refunded_total = refunded_total + refundable_amount
++        remaining -= refundable_amount
+         emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+-    if invoice["credit_applied"] > 0:
+-        add_entry(ctx, invoice["customer_id"], invoice["credit_applied"], "refund", invoice["id"])
+-    if refunded_total == 0 and invoice["credit_applied"] == 0:
+-        raise InvalidStateError("invoice has no successful payment to refund")
+-    return _create_credit_note(ctx, invoice_id, refunded_total + invoice["credit_applied"], reason, True)
++    if amount is None and credit_remaining > 0:
++        add_entry(ctx, invoice["customer_id"], credit_remaining, "refund", invoice_id)
++    return _create_credit_note(ctx, invoice_id, refunded_total + (credit_remaining if amount is None else 0), reason, True)
+ 
+ 
+ def credit_invoice(ctx, invoice_id, amount, reason):
+diff --git a/tests/test_partial_refunds.py b/tests/test_partial_refunds.py
+new file mode 100644
+index 0000000..7ae8b9d
+--- /dev/null
++++ b/tests/test_partial_refunds.py
+@@ -0,0 +1,81 @@
++import pytest
++
++from billing import api, ledger, refunds
++from billing.errors import InvalidStateError, ValidationError
++
++
++def paid_invoice(world, credit=0):
++    customer = world.customer()
++    if credit:
++        ledger.grant_credit(world.ctx, customer["id"], credit)
++    world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    return customer, world.engine.invoices_for(customer["id"])[0]
++
++
++def test_partial_refunds_then_full_refund_only_remainder(world):
++    _, invoice = paid_invoice(world)
++    payment = world.ctx.store.payments_for_invoice(invoice["id"])[0]
++
++    first = refunds.refund_invoice(world.ctx, invoice["id"], amount=250)
++    second = world.engine.refund(invoice["id"], amount=300)
++    last = world.engine.refund(invoice["id"])
++
++    assert [note["amount"] for note in (first, second, last)] == [250, 300, 450]
++    assert all(note["refunded"] for note in (first, second, last))
++    assert [amount for _, amount in world.gateway.refunds] == [250, 300, 450]
++    assert payment["refunded_amount"] == 1000
++    assert payment["status"] == "refunded"
++    with pytest.raises(InvalidStateError):
++        world.engine.refund(invoice["id"])
++
++
++def test_partial_refund_status_and_validation(world):
++    _, invoice = paid_invoice(world)
++    payment = world.ctx.store.payments_for_invoice(invoice["id"])[0]
++    world.engine.refund(invoice["id"], amount=400)
++    assert payment["status"] == "partially_refunded"
++    for amount in (0, -1, 601, True, 1.5):
++        with pytest.raises(ValidationError):
++            world.engine.refund(invoice["id"], amount=amount)
++    assert len(world.gateway.refunds) == 1
++
++
++def test_full_refund_returns_applied_credit_once(world):
++    customer, invoice = paid_invoice(world, credit=700)
++    first = world.engine.refund(invoice["id"], amount=100)
++    last = world.engine.refund(invoice["id"])
++    assert [first["amount"], last["amount"]] == [100, 900]
++    assert [amount for _, amount in world.gateway.refunds] == [100, 200]
++    assert ledger.balance(world.ctx, customer["id"]) == 700
++    with pytest.raises(InvalidStateError):
++        world.engine.refund(invoice["id"])
++
++
++def test_api_accepts_optional_refund_amount(world):
++    _, invoice = paid_invoice(world)
++    path = f"/invoices/{invoice['id']}/refund"
++    assert api.handle(world.engine, "POST", path, {"amount": 125})[1]["amount"] == 125
++    assert api.handle(world.engine, "POST", path, {"amount": "125"})[0] == 400
++    assert api.handle(world.engine, "POST", path, {"amount": 0})[0] == 400
++    assert api.handle(world.engine, "POST", path)[1]["amount"] == 875
++
++
++def test_refunds_take_oldest_payment_first(world):
++    _, invoice = paid_invoice(world)
++    first = world.ctx.store.payments_for_invoice(invoice["id"])[0]
++    second = dict(first, id="pay_extra", amount=200, refunded_amount=0, gateway_ref="ch_extra")
++    world.ctx.store.payments[second["id"]] = second
++    world.gateway._captured_by_ref[second["gateway_ref"]] = 200
++    world.engine.refund(invoice["id"], amount=1100)
++    assert world.gateway.refunds == [(first["gateway_ref"], 1000), (second["gateway_ref"], 100)]
++    assert first["status"] == "refunded"
++    assert second["status"] == "partially_refunded"
++
++
++def test_credit_only_invoice_can_be_refunded_once(world):
++    customer, invoice = paid_invoice(world, credit=1000)
++    assert world.engine.refund(invoice["id"])["amount"] == 1000
++    assert ledger.balance(world.ctx, customer["id"]) == 1000
++    assert world.gateway.refunds == []
++    with pytest.raises(InvalidStateError):
++        world.engine.refund(invoice["id"])

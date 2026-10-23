@@ -1,0 +1,14 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 7,
+  "target_total": 7,
+  "regressions": [],
+  "failed_targets": [],
+  "location_correct": true,
+  "answer": {
+    "file": "engine.py",
+    "function": "BillingEngine.__init__"
+  },
+  "answer_error": null
+}

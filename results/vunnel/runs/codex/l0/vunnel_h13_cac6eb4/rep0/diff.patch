@@ -1,0 +1,160 @@
+diff --git a/src/vunnel/providers/__init__.py b/src/vunnel/providers/__init__.py
+index ab937c2..9355682 100644
+--- a/src/vunnel/providers/__init__.py
++++ b/src/vunnel/providers/__init__.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
+ import logging
++import os
++from enum import Enum
+ from importlib.metadata import entry_points
+ 
+ from vunnel.providers import (
+@@ -35,6 +37,21 @@ from vunnel.providers import (
+ 
+ from vunnel.provider import get_provider_tags
+ 
++
++class PluginOverrideMode(str, Enum):
++    FAIL = "fail"
++    REPLACE = "replace"
++    IGNORE = "ignore"
++
++    @classmethod
++    def from_env(cls) -> PluginOverrideMode:
++        value = os.environ.get("VUNNEL_PLUGIN_OVERRIDE_MODE", "").lower()
++        try:
++            return cls(value)
++        except ValueError:
++            return cls.FAIL
++
++
+ _providers = {
+     # vulnerability providers
+     alma.Provider.name(): alma.Provider,
+@@ -80,9 +97,15 @@ def versions():
+     return {n: p.version() for (n, p) in _providers.items()}
+ 
+ 
+-def register(name, cls):
++def register(name, cls, mode=None):
++    if mode is None:
++        mode = PluginOverrideMode.from_env()
++
+     if name in _providers and _providers[name] != cls:
+-        raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode is PluginOverrideMode.FAIL:
++            raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode is PluginOverrideMode.IGNORE:
++            return
+     _providers[name] = cls
+ 
+ 
+diff --git a/tests/unit/test_provider_registration.py b/tests/unit/test_provider_registration.py
+new file mode 100644
+index 0000000..30a2fe3
+--- /dev/null
++++ b/tests/unit/test_provider_registration.py
+@@ -0,0 +1,101 @@
++import pytest
++
++from vunnel import providers
++
++
++@pytest.mark.parametrize(
++    ("value", "expected"),
++    [
++        (None, "FAIL"),
++        ("", "FAIL"),
++        ("unknown", "FAIL"),
++        ("fail", "FAIL"),
++        ("RePlAcE", "REPLACE"),
++        ("IGNORE", "IGNORE"),
++    ],
++)
++def test_override_mode_from_env(monkeypatch, value, expected):
++    if value is None:
++        monkeypatch.delenv("VUNNEL_PLUGIN_OVERRIDE_MODE", raising=False)
++    else:
++        monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", value)
++
++    assert providers.PluginOverrideMode.from_env() is getattr(providers.PluginOverrideMode, expected)
++
++
++@pytest.mark.parametrize("mode_name", ["FAIL", "REPLACE", "IGNORE"])
++def test_register_new_name_in_every_mode(monkeypatch, mode_name):
++    name = "test-plugin-override-new"
++    cls = type("PluginProvider", (), {})
++    monkeypatch.delitem(providers._providers, name, raising=False)
++
++    providers.register(name, cls, mode=getattr(providers.PluginOverrideMode, mode_name))
++
++    assert providers.provider_class(name) is cls
++    monkeypatch.delitem(providers._providers, name)
++
++
++@pytest.mark.parametrize(
++    ("mode_name", "expected_class"),
++    [("REPLACE", "new"), ("IGNORE", "original")],
++)
++def test_register_collision_with_explicit_mode(monkeypatch, mode_name, expected_class):
++    name = "nvd"
++    original = providers.provider_class(name)
++    new = type("PluginProvider", (), {})
++    monkeypatch.setitem(providers._providers, name, original)
++
++    providers.register(name, new, mode=getattr(providers.PluginOverrideMode, mode_name))
++
++    assert providers.provider_class(name) is (new if expected_class == "new" else original)
++
++
++def test_register_collision_fails_by_default(monkeypatch):
++    name = "test-plugin-override-default"
++    original = type("OriginalProvider", (), {})
++    new = type("PluginProvider", (), {})
++    monkeypatch.setitem(providers._providers, name, original)
++    monkeypatch.delenv("VUNNEL_PLUGIN_OVERRIDE_MODE", raising=False)
++
++    with pytest.raises(KeyError):
++        providers.register(name, new)
++
++    assert providers.provider_class(name) is original
++
++
++def test_explicit_fail_overrides_environment(monkeypatch):
++    name = "test-plugin-override-explicit-fail"
++    original = type("OriginalProvider", (), {})
++    new = type("PluginProvider", (), {})
++    monkeypatch.setitem(providers._providers, name, original)
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "replace")
++
++    with pytest.raises(KeyError):
++        providers.register(name, new, mode=providers.PluginOverrideMode.FAIL)
++
++    assert providers.provider_class(name) is original
++
++
++def test_register_reads_environment_at_call_time(monkeypatch):
++    name = "test-plugin-override-env"
++    original = type("OriginalProvider", (), {})
++    new = type("PluginProvider", (), {})
++    monkeypatch.setitem(providers._providers, name, original)
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "ignore")
++
++    providers.register(name, new)
++    assert providers.provider_class(name) is original
++
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "REPLACE")
++    providers.register(name, new)
++    assert providers.provider_class(name) is new
++
++
++def test_register_same_class_is_idempotent(monkeypatch):
++    name = "test-plugin-override-same-class"
++    cls = type("PluginProvider", (), {})
++    monkeypatch.setitem(providers._providers, name, cls)
++
++    providers.register(name, cls)
++
++    assert providers.provider_class(name) is cls

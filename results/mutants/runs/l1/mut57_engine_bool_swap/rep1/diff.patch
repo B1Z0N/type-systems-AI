@@ -1,0 +1,28 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index acff999..6f4272b 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -11,7 +11,7 @@ class BillingEngine:
+         self, clock, gateway, transport, dunning_policy: dict | None = None, fx: RateTable | None = None
+     ) -> None:
+         self.clock = clock
+-        self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
++        self.ctx = Context(clock, gateway, transport, dunning_policy or DEFAULT_POLICY, fx)
+ 
+     def subscribe(
+         self, customer_id: str, items: list, *, trial_days: int | None = None, coupon_id: str | None = None
+diff --git a/tests/test_dunning_nocard.py b/tests/test_dunning_nocard.py
+new file mode 100644
+index 0000000..40f561f
+--- /dev/null
++++ b/tests/test_dunning_nocard.py
+@@ -0,0 +1,9 @@
++
++
++def test_customer_without_card_enters_dunning(world):
++    cus = world.customer(card=False)
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] is not None
++    assert sub["status"] == "past_due"

@@ -1,0 +1,34 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index 8ee6e70..88e5471 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -49,7 +49,7 @@ def refund_invoice(ctx: Context, invoice_id: str, reason: str = "requested_by_cu
+         if not result["ok"]:
+             raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+         payment["refunded_amount"] = payment["refunded_amount"] + remaining
+-        payment["ok"] = "refunded"
++        payment["status"] = "refunded"
+         refunded = refunded + remaining
+         emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+     if invoice["credit_applied"] > 0:
+diff --git a/tests/test_refund_full.py b/tests/test_refund_full.py
+new file mode 100644
+index 0000000..4f1dcc6
+--- /dev/null
++++ b/tests/test_refund_full.py
+@@ -0,0 +1,15 @@
++import pytest
++from billing.errors import InvalidStateError
++
++
++def test_full_refund(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    note = world.engine.refund(inv["id"])
++    assert note["amount"] == 1000
++    assert world.gateway.refunds == [("ch_000001", 1000)]
++    [payment] = world.ctx.store.payments_for_invoice(inv["id"])
++    assert payment["status"] == "refunded"
++    with pytest.raises(InvalidStateError):
++        world.engine.refund(inv["id"])

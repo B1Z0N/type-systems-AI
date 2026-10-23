@@ -1,0 +1,1 @@
+{"summary": "Added a configurable version_markers option (with npm and golang defaults, null-to-disable, and validation) to the chainguard-libraries Config and OpenVEX parser so npm and golang products are no longer dropped."}

@@ -1,0 +1,41 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index ea684ca..704adec 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -39,7 +39,7 @@ def record_failure(ctx: Context, invoice: Invoice, failure_code: str) -> None:
+         return
+     action = policy["final_action"]
+     if action == "cancel":
+-        pass
++        mark_uncollectible(ctx, invoice["id"])
+         transition(ctx, subscription, "canceled")
+     elif action == "pause":
+         transition(ctx, subscription, "paused")
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..ba814d6 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,6 @@
+ from billing import ledger
+ from billing.clock import format_date
++from conftest import World
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -34,6 +35,16 @@ def test_cancel_at_period_end(world):
+     assert len(world.engine.invoices_for(cus["id"])) == 1
+ 
+ 
++def test_cancel_policy_marks_uncollectible():
++    world = World({"retry_offsets_days": [2], "final_action": "cancel"})
++    cus = world.customer(last4="9995")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    world.advance_days(2)
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "uncollectible"
++    assert sub["status"] == "canceled"
++
++
+ def test_upgrade_prorates_on_next_invoice(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])

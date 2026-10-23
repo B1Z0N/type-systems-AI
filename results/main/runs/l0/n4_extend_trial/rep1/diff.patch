@@ -1,0 +1,29 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index 9183b27..3c670e5 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -135,6 +135,24 @@ def change_items(ctx, subscription_id, items, *, prorate=True):
+     return subscription
+ 
+ 
++def extend_trial(ctx, subscription_id, days):
++    """Push back the end of a trialing subscription's trial by a whole number of days."""
++    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    if subscription["status"] != "trialing":
++        raise InvalidStateError("only trialing subscriptions can have their trial extended")
++    delta = days * SECONDS_PER_DAY
++    subscription["trial_end"] += delta
++    subscription["current_period_end"] += delta
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def cancel(ctx, subscription_id, *, at_period_end=True):
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] == "canceled":

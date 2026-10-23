@@ -1,0 +1,178 @@
+diff --git a/src/vunnel/providers/alma/__init__.py b/src/vunnel/providers/alma/__init__.py
+index 07d9402..0524840 100644
+--- a/src/vunnel/providers/alma/__init__.py
++++ b/src/vunnel/providers/alma/__init__.py
+@@ -58,7 +58,7 @@ class Provider(provider.Provider):
+         with timer(self.name(), self.logger):
+             # TODO: use of last_updated as NVD provider does to avoid downloading all
+             # vulnerability data from the source and make incremental updates instead
+-            with self.results_writer() as writer:
++            with self.results_writer() as writer, self.parser:
+                 for vuln_id, vuln_schema_version, record in self.parser.get():
+                     vuln_schema = self.compatible_schema(vuln_schema_version)
+                     if not vuln_schema:
+diff --git a/src/vunnel/providers/alma/parser.py b/src/vunnel/providers/alma/parser.py
+index 160d142..c0ef5ed 100644
+--- a/src/vunnel/providers/alma/parser.py
++++ b/src/vunnel/providers/alma/parser.py
+@@ -2,12 +2,16 @@ from __future__ import annotations
+ 
+ import logging
+ import os
++from datetime import UTC, datetime
+ from typing import TYPE_CHECKING, Any
+ 
+ import orjson
+ 
++from vunnel.tool import fixdate
++
+ if TYPE_CHECKING:
+     from collections.abc import Generator
++    from types import TracebackType
+ 
+     from vunnel.workspace import Workspace
+ 
+@@ -35,12 +39,17 @@ class Parser:
+     # Last audit: 2025-10-14
+ 
+     def __init__(
+-        self, ws: Workspace, logger: logging.Logger | None = None, alma_linux_versions: list[str] | None = None
++        self,
++        ws: Workspace,
++        fixdater: fixdate.Finder | None = None,
++        logger: logging.Logger | None = None,
++        alma_linux_versions: list[str] | None = None,
+     ):
+         if alma_linux_versions is None:
+             alma_linux_versions = ["8", "9", "10"]
+         self.alma_linux_versions = alma_linux_versions
+         self.workspace = ws
++        self.fixdater = fixdater if fixdater is not None else fixdate.default_finder(ws)
+         self.git_url = self._git_src_url_
+         self.git_branch = self._git_src_branch_
+         self.urls = [self.git_url]
+@@ -52,6 +61,15 @@ class Parser:
+             source=self.git_url, branch=self.git_branch, checkout_dest=_checkout_dst_, logger=self.logger
+         )
+ 
++    def __enter__(self) -> Parser:
++        self.fixdater.__enter__()
++        return self
++
++    def __exit__(
++        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
++    ) -> None:
++        self.fixdater.__exit__(exc_type, exc_val, exc_tb)
++
+     def _load(self, version: str) -> Generator[dict[str, Any]]:
+         self.logger.info("loading data from git repository")
+ 
+@@ -124,6 +142,23 @@ class Parser:
+                     affected_pkg["ecosystem_specific"] = {}
+                 affected_pkg["ecosystem_specific"]["rpm_modularity"] = rpm_modularity
+ 
++        # AlmaLinux's published timestamp is the authoritative advisory fix date.
++        published = vuln_entry.get("published")
++        if published:
++            timestamp = datetime.fromisoformat(published.replace("Z", "+00:00"))
++            if timestamp.tzinfo is None:
++                timestamp = timestamp.replace(tzinfo=UTC)
++            fix_date = timestamp.astimezone(UTC).date().isoformat()
++            for affected_pkg in vuln_entry.get("affected", []):
++                for affected_range in affected_pkg.get("ranges", []):
++                    fixes = [
++                        {"version": event["fixed"], "date": fix_date, "kind": "advisory"}
++                        for event in affected_range.get("events", [])
++                        if event.get("fixed")
++                    ]
++                    if fixes:
++                        affected_range.setdefault("database_specific", {}).setdefault("anchore", {})["fixes"] = fixes
++
+         # Add missing library packages for known advisory gaps
+         self._add_missing_library_packages(vuln_entry)
+ 
+@@ -167,6 +202,7 @@ class Parser:
+         return None
+ 
+     def get(self) -> Generator[tuple[str, str, dict[str, Any]]]:
++        self.fixdater.download()
+         # Initialize the git repository
+         self.git_wrapper.delete_repo()
+         self.git_wrapper.clone_repo()
+diff --git a/tests/unit/providers/alma/test_alma.py b/tests/unit/providers/alma/test_alma.py
+index 29702ea..a834603 100644
+--- a/tests/unit/providers/alma/test_alma.py
++++ b/tests/unit/providers/alma/test_alma.py
+@@ -8,7 +8,7 @@ from vunnel.providers.alma.parser import Parser
+ 
+ @patch("vunnel.providers.alma.git.GitWrapper.clone_repo")
+ @patch("vunnel.providers.alma.git.GitWrapper.delete_repo")
+-def test_provider_schema(mock_git_delete, mock_git_clone, helpers):
++def test_provider_schema(mock_git_delete, mock_git_clone, helpers, auto_fake_fixdate_finder):
+     mock_git_clone.return_value = None
+     mock_git_delete.return_value = None
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+@@ -24,7 +24,7 @@ def test_provider_schema(mock_git_delete, mock_git_clone, helpers):
+ 
+ @patch("vunnel.providers.alma.git.GitWrapper.clone_repo")
+ @patch("vunnel.providers.alma.git.GitWrapper.delete_repo")
+-def test_parser(mock_git_delete, mock_git_clone, helpers):
++def test_parser(mock_git_delete, mock_git_clone, helpers, auto_fake_fixdate_finder):
+     mock_git_clone.return_value = None
+     mock_git_delete.return_value = None
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+@@ -56,7 +56,7 @@ def test_parser(mock_git_delete, mock_git_clone, helpers):
+         assert affected_pkg["ecosystem_specific"]["rpm_modularity"] == "mariadb:10.3"
+ 
+ 
+-def test_modularity_parsing(helpers):
++def test_modularity_parsing(helpers, auto_fake_fixdate_finder):
+     """Test the _parse_modularity_from_summary method."""
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+     parser = Parser(ws=workspace)
+@@ -83,3 +83,45 @@ def test_modularity_parsing(helpers):
+     for summary, expected in test_cases:
+         result = parser._parse_modularity_from_summary(summary)
+         assert result == expected, f"Failed for '{summary}': got '{result}', expected '{expected}'"
++
++
++def test_advisory_fix_dates_include_library_clone_and_use_utc_date(helpers, auto_fake_fixdate_finder):
++    workspace = helpers.provider_workspace_helper(name=Provider.name())
++    parser = Parser(ws=workspace, fixdater=auto_fake_fixdate_finder)
++    advisory = {
++        "id": "ALSA-2019:3706",
++        "published": "2019-11-06T23:30:00-02:00",
++        "affected": [{
++            "package": {"name": "lua", "ecosystem": "AlmaLinux:8"},
++            "ranges": [
++                {"type": "ECOSYSTEM", "events": [{"introduced": "0"}, {"fixed": "5.3.4-12.el8"}, {"fixed": "5.3.4-13.el8"}]},
++                {"type": "ECOSYSTEM", "events": [{"introduced": "0"}]},
++            ],
++        }],
++    }
++
++    record = parser._normalize(advisory, "8")[2]
++
++    assert record["database_specific"]["anchore"] == {"record_type": "advisory"}
++    assert {pkg["package"]["name"] for pkg in record["affected"]} == {"lua", "lua-libs"}
++    for pkg in record["affected"]:
++        assert pkg["ranges"][0]["database_specific"]["anchore"]["fixes"] == [
++            {"version": "5.3.4-12.el8", "date": "2019-11-07", "kind": "advisory"},
++            {"version": "5.3.4-13.el8", "date": "2019-11-07", "kind": "advisory"},
++        ]
++        assert "database_specific" not in pkg["ranges"][1]
++
++
++def test_parser_downloads_fix_dates_once_per_get(helpers, auto_fake_fixdate_finder, monkeypatch):
++    workspace = helpers.provider_workspace_helper(name=Provider.name())
++    parser = Parser(ws=workspace, fixdater=auto_fake_fixdate_finder, alma_linux_versions=["8", "9"])
++    monkeypatch.setattr(parser.git_wrapper, "delete_repo", lambda: None)
++    monkeypatch.setattr(parser.git_wrapper, "clone_repo", lambda: None)
++    monkeypatch.setattr(parser, "_load", lambda version: iter([{"id": f"ALSA-{version}", "affected": []}]))
++    downloads = []
++    monkeypatch.setattr(auto_fake_fixdate_finder, "download", lambda: downloads.append(True))
++
++    with parser:
++        assert len(list(parser.get())) == 2
++
++    assert downloads == [True]

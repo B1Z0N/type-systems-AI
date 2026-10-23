@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Guard wolfi/chainguard build_reference_links against None for non-CVE/GHSA ids so they fall back to the distro security page link."
+  },
+  "answer_error": null
+}

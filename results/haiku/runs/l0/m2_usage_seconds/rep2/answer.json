@@ -1,0 +1,1 @@
+{"summary": "Usage records now store their timestamp in epoch seconds (with the sub-second remainder kept alongside) and convert back to milliseconds at the report_usage and POST /usage boundaries, so client-facing behaviour and billing results are unchanged."}

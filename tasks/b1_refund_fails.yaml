@@ -1,0 +1,25 @@
+id: b1_refund_fails
+category: bugfix
+stratum: type_relevant
+title: Refunds fail although the customer was charged
+read_only: false
+checker_catches_at: l3
+relevant_files: [refunds.py, payments.py, store.py]
+mutations:
+  - file: refunds.py
+    find: 'payments = successful_payments(ctx, invoice["id"])'
+    replace: 'payments = successful_payments(ctx, invoice["customer_id"])'
+prompt: |
+  Support reports that refunding a paid invoice fails with
+  `InvalidStateError: invoice has no successful payment to refund`, even though the customer
+  was charged successfully. Find the root cause and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location: {file: refunds.py, function: refund_invoice}
+grader:
+  type: tests
+  target_tests:
+    - base/test_dunning_refunds.py::test_full_refund
+    - base/test_dunning_refunds.py::test_refund_returns_applied_credit
+    - base/test_dunning_refunds.py::test_refund_with_multiple_customers
+    - base/test_webhooks_reports_api.py::test_revenue_between_nets_credit_notes

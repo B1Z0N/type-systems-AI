@@ -1,0 +1,1 @@
+{"summary": "Added subscriptions.extend_trial, which pushes a trialing subscription's trial_end and current_period_end back by whole days, emits subscription.updated, and raises ValidationError or InvalidStateError on bad input, with tests covering billing starting at the extended date."}

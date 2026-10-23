@@ -1,0 +1,16 @@
+# Bugs applied to the natural rewrite where the L3 text doesn't exist verbatim.
+# Each is verified by tools/check_tasks.py to break exactly the same hidden tests as in l3/l0.
+3e170a8a6bb14ca4:
+- file: reports.py
+  find: '        mrr_by_currency[currency] = mrr_by_currency.get(currency, 0) + monthly_amount(ctx,
+    subscription)
+
+    '
+  replace: '        mrr_by_currency[currency] = mrr_by_currency.get(currency, 0) -
+    monthly_amount(ctx, subscription)
+
+    '
+c3d6bec12fa29a2e:
+- file: usage.py
+  find: "    start_ms = to_millis(period_start)\n    end_ms = to_millis(period_end)\n"
+  replace: "    start_ms = period_start\n    end_ms = period_end\n"

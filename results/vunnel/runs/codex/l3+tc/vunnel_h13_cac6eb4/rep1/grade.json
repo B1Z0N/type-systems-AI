@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added configurable provider plugin collision handling with fail, replace, and ignore modes."
+  },
+  "answer_error": null
+}

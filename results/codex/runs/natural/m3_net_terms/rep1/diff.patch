@@ -1,0 +1,184 @@
+diff --git a/billing/api.py b/billing/api.py
+index 530f179..0d001a2 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -6,6 +6,7 @@ Handlers take (engine, path params, body dict) and return (http status, JSON pay
+ 
+ from . import customers, invoices
+ from .errors import BillingError, NotFoundError, ValidationError
++from .models import INVOICE_NET_DAYS
+ from .render import render_invoice
+ from .serialization import customer_json, invoice_json, subscription_json
+ 
+@@ -55,6 +56,7 @@ def create_customer(engine, _, body):
+         _required_str(body, "name"),
+         _optional_str(body, "currency") or "usd",
+         tax_region=_optional_str(body, "tax_region"),
++        net_terms_days=_int(body, "net_terms_days", INVOICE_NET_DAYS),
+     )
+     return 201, customer_json(customer)
+ 
+diff --git a/billing/customers.py b/billing/customers.py
+index 3b2a672..a951a9c 100644
+--- a/billing/customers.py
++++ b/billing/customers.py
+@@ -4,7 +4,7 @@ import hashlib
+ 
+ from .errors import InvalidStateError, ValidationError
+ from .events import emit
+-from .models import DEFAULT_CURRENCY
++from .models import DEFAULT_CURRENCY, INVOICE_NET_DAYS
+ from .money import is_supported
+ from .serialization import customer_json
+ 
+@@ -21,15 +21,22 @@ def _normalize_email(email):
+     return normalized
+ 
+ 
+-def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None, tax_exempt=False, metadata=None):
++def _validate_net_terms_days(value):
++    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
++        raise ValidationError("net_terms_days must be a non-negative integer")
++
++
++def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None, tax_exempt=False, metadata=None,
++                    net_terms_days=INVOICE_NET_DAYS):
+     """Create a customer billed in `currency` and emit "customer.created".
+ 
+     `tax_region` is a region code such as "US-CA" (stored upper-case) used for tax
+     lookup; `metadata` is copied. Raises ValidationError for an unsupported currency or
+-    a malformed email.
++    a malformed email or invalid payment terms.
+     """
+     if not is_supported(currency):
+         raise ValidationError(f"unsupported currency: {currency}")
++    _validate_net_terms_days(net_terms_days)
+     # The id is allocated before the email is validated, so a rejected email still
+     # consumes an id. Keep this order: ids must stay stable across versions.
+     customer = {
+@@ -39,6 +46,7 @@ def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None
+         "currency": currency,
+         "tax_region": tax_region.upper() if tax_region else None,
+         "tax_exempt": tax_exempt,
++        "net_terms_days": net_terms_days,
+         "default_payment_method": None,
+         "created_at": ctx.clock.now(),
+         "metadata": dict(metadata or {}),
+@@ -48,7 +56,8 @@ def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None
+     return customer
+ 
+ 
+-def update_customer(ctx, customer_id, *, email=None, name=None, tax_region=None, tax_exempt=None):
++def update_customer(ctx, customer_id, *, email=None, name=None, tax_region=None, tax_exempt=None,
++                    net_terms_days=None):
+     """Update the given fields (None means "leave unchanged") and emit "customer.updated".
+ 
+     Passing `tax_region=""` clears the region. Fields are applied one by one, so an
+@@ -63,6 +72,9 @@ def update_customer(ctx, customer_id, *, email=None, name=None, tax_region=None,
+         customer["tax_region"] = tax_region.upper() or None
+     if tax_exempt is not None:
+         customer["tax_exempt"] = tax_exempt
++    if net_terms_days is not None:
++        _validate_net_terms_days(net_terms_days)
++        customer["net_terms_days"] = net_terms_days
+     emit(ctx, "customer.updated", {"customer": customer_json(customer)})
+     return customer
+ 
+diff --git a/billing/invoices.py b/billing/invoices.py
+index 4329abf..4757157 100644
+--- a/billing/invoices.py
++++ b/billing/invoices.py
+@@ -10,7 +10,7 @@ from .discounts import applies_this_period, line_discounts
+ from .errors import CurrencyMismatchError, InvalidStateError, ValidationError
+ from .events import emit
+ from .ledger import apply_credit, restore_credit
+-from .models import INVOICE_NET_DAYS, SECONDS_PER_DAY
++from .models import SECONDS_PER_DAY
+ from .money import total
+ from .pricing import amount_for_quantity
+ from .serialization import invoice_json
+@@ -247,7 +247,8 @@ def finalize(ctx, invoice_id):
+     invoice["status"] = "open"
+     invoice["number"] = ctx.store.next_invoice_number()
+     invoice["finalized_at"] = now
+-    invoice["due_at"] = now + INVOICE_NET_DAYS * SECONDS_PER_DAY
++    customer = ctx.store.require_customer(invoice["customer_id"])
++    invoice["due_at"] = now + customer["net_terms_days"] * SECONDS_PER_DAY
+     apply_credit(ctx, invoice)
+     emit(ctx, "invoice.finalized", {"invoice": invoice_json(invoice)})
+     if invoice["amount_due"] == 0:
+diff --git a/billing/serialization.py b/billing/serialization.py
+index bff4cef..24495f3 100644
+--- a/billing/serialization.py
++++ b/billing/serialization.py
+@@ -15,6 +15,7 @@ def customer_json(customer):
+         "currency": customer["currency"],
+         "tax_region": customer["tax_region"],
+         "tax_exempt": customer["tax_exempt"],
++        "net_terms_days": customer["net_terms_days"],
+     }
+ 
+ 
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..93759a9 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,9 @@
+-from billing import ledger
++import pytest
++
++from billing import customers, invoices, ledger
+ from billing.clock import format_date
++from billing.errors import ValidationError
++from billing.models import SECONDS_PER_DAY
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -55,3 +59,28 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_invoice_uses_customer_terms_at_finalization(world):
++    cus = customers.create_customer(world.ctx, "terms@example.com", "Terms", net_terms_days=30)
++    first = invoices.create_one_off(world.ctx, cus["id"], [("Service", 100, 1)])
++    customers.update_customer(world.ctx, cus["id"], net_terms_days=0)
++    invoices.finalize(world.ctx, first["id"])
++    assert first["due_at"] == first["finalized_at"]
++
++    customers.update_customer(world.ctx, cus["id"], net_terms_days=14)
++    second = invoices.create_one_off(world.ctx, cus["id"], [("Service", 100, 1)])
++    invoices.finalize(world.ctx, second["id"])
++    assert second["due_at"] == second["finalized_at"] + 14 * SECONDS_PER_DAY
++    assert first["due_at"] == first["finalized_at"]
++
++
++def test_customer_terms_default_and_validation(world):
++    cus = customers.create_customer(world.ctx, "default@example.com", "Default")
++    assert cus["net_terms_days"] == 7
++    for invalid in (-1, True, 1.5, "10"):
++        with pytest.raises(ValidationError):
++            customers.create_customer(world.ctx, "bad@example.com", "Bad", net_terms_days=invalid)
++        with pytest.raises(ValidationError):
++            customers.update_customer(world.ctx, cus["id"], net_terms_days=invalid)
++    assert cus["net_terms_days"] == 7
+diff --git a/tests/test_webhooks_reports_api.py b/tests/test_webhooks_reports_api.py
+index b4b87fb..1c44f1a 100644
+--- a/tests/test_webhooks_reports_api.py
++++ b/tests/test_webhooks_reports_api.py
+@@ -55,3 +55,14 @@ def test_api_round_trip(world):
+     status, err = handle(world.engine, "GET", "/invoices/in_999999")
+     assert status == 404
+     assert handle(world.engine, "POST", "/usage", {"subscription": sub["id"]})[0] == 400
++
++
++def test_api_customer_net_terms(world):
++    body = {"email": "terms@example.com", "name": "Terms"}
++    status, customer = handle(world.engine, "POST", "/customers", {**body, "net_terms_days": 0})
++    assert status == 201
++    assert customer["net_terms_days"] == 0
++    assert world.ctx.store.require_customer(customer["id"])["net_terms_days"] == 0
++    for invalid in (-1, None, True, "10"):
++        status, _ = handle(world.engine, "POST", "/customers", {**body, "net_terms_days": invalid})
++        assert status == 400

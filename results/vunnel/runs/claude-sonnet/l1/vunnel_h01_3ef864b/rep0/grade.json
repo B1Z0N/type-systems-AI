@@ -1,0 +1,14 @@
+{
+  "score": 0.9,
+  "passed": false,
+  "target_passed": 9,
+  "target_total": 10,
+  "regressions": [],
+  "failed_targets": [
+    "tests/unit/providers/chainguard_libraries/test_provider.py::test_version_markers_rejects_env_string"
+  ],
+  "answer": {
+    "summary": "Added a configurable version_markers option (defaults now include npm and golang) to the chainguard-libraries Config and OpenVEX parser, with null-disable, empty-marker and non-map validation, and CLI config output."
+  },
+  "answer_error": null
+}

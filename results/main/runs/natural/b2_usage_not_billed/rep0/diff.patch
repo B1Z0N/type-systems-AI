@@ -1,0 +1,15 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index e72b4c6..e56d88d 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -43,8 +43,8 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     """Usage records within [period_start, period_end) (epoch seconds), oldest first."""
+-    start_ms = period_start
+-    end_ms = period_end
++    start_ms = to_millis(period_start)
++    end_ms = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start_ms <= record["timestamp"] < end_ms
+     ]

@@ -1,0 +1,1 @@
+{"summary": "Customers now have a configurable net_terms_days setting (default 7, negative values rejected with a ValidationError / HTTP 400), settable via create_customer, update_customer and POST /customers, and finalized invoices set due_at from the customer's current term."}

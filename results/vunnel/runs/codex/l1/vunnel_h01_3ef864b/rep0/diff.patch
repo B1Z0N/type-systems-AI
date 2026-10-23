@@ -1,0 +1,215 @@
+diff --git a/src/vunnel/cli/config.py b/src/vunnel/cli/config.py
+index f7ab4ef..8922a18 100644
+--- a/src/vunnel/cli/config.py
++++ b/src/vunnel/cli/config.py
+@@ -222,7 +222,14 @@ def load(path: str = ".vunnel.yaml") -> Application:
+             # from the containing class.
+             instance = Application().to_dict()
+ 
++            raw_markers = (app_object.get("providers") or {}).get("chainguard_libraries", {})
++            if isinstance(raw_markers, dict) and "version_markers" in raw_markers:
++                providers.chainguard_libraries.normalize_version_markers(raw_markers["version_markers"])
+             mergedeep.merge(instance, app_object)
++            markers = instance["providers"]["chainguard_libraries"]["version_markers"]
++            instance["providers"]["chainguard_libraries"]["version_markers"] = (
++                providers.chainguard_libraries.normalize_version_markers(markers)
++            )
+             cfg = Application.from_dict(instance)
+             if cfg is None:
+                 raise FileNotFoundError("parsed empty config")
+@@ -231,5 +238,8 @@ def load(path: str = ".vunnel.yaml") -> Application:
+ 
+     # ensure env vars take precedence over config file values
+     apply_env_overrides(cfg)
++    cfg.providers.chainguard_libraries.version_markers = providers.chainguard_libraries.normalize_version_markers(
++        cfg.providers.chainguard_libraries.version_markers
++    )
+ 
+     return cfg
+diff --git a/src/vunnel/providers/chainguard_libraries/__init__.py b/src/vunnel/providers/chainguard_libraries/__init__.py
+index 290f7ed..5bf53e9 100644
+--- a/src/vunnel/providers/chainguard_libraries/__init__.py
++++ b/src/vunnel/providers/chainguard_libraries/__init__.py
+@@ -7,7 +7,7 @@ from importlib import metadata
+ from vunnel import provider, result, schema
+ from vunnel.utils import timer
+ 
+-from .openvex_parser import OpenVEXParser
++from .openvex_parser import DEFAULT_VERSION_MARKERS, OpenVEXParser, normalize_version_markers
+ 
+ 
+ def _default_user_agent() -> str:
+@@ -29,6 +29,10 @@ class Config:
+     )
+     request_timeout: int = 125
+     openvex_url: str = "https://libraries.cgr.dev/openvex/v1/all.json"
++    version_markers: dict[str, str] = field(default_factory=lambda: DEFAULT_VERSION_MARKERS.copy())
++
++    def __post_init__(self) -> None:
++        self.version_markers = normalize_version_markers(self.version_markers)
+ 
+ 
+ class Provider(provider.Provider):
+@@ -50,6 +54,7 @@ class Provider(provider.Provider):
+             download_timeout=self.config.request_timeout,
+             logger=self.logger,
+             user_agent=self.runtime_cfg.user_agent,
++            version_markers=self.config.version_markers,
+         )
+ 
+         # this provider requires the previous state from former runs
+diff --git a/src/vunnel/providers/chainguard_libraries/openvex_parser.py b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+index 548222c..8cbd31e 100644
+--- a/src/vunnel/providers/chainguard_libraries/openvex_parser.py
++++ b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+@@ -12,6 +12,18 @@ from vunnel.utils import date, vulnerability
+ from vunnel.utils import http_wrapper as http
+ 
+ 
++DEFAULT_VERSION_MARKERS = {"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}
++
++
++def normalize_version_markers(markers: dict[str, str | None]) -> dict[str, str]:
++    if not isinstance(markers, dict):
++        raise ValueError("version_markers must be a map")
++    empty = sorted(key for key, value in markers.items() if value == "")
++    if empty:
++        raise ValueError(f"empty version marker for {empty}")
++    return {key: value for key, value in markers.items() if value is not None}
++
++
+ class OpenVEXParser:
+     _openvex_dir_ = "openvex"
+     _security_reference_url_ = "https://images.chainguard.dev/security"
+@@ -26,6 +38,7 @@ class OpenVEXParser:
+         logger: logging.Logger = None,
+         security_reference_url: str = None,
+         user_agent: str = None,
++        version_markers: dict[str, str] = None,
+     ):
+         """
+         :param workspace.Workspace workspace: workspace to use for downloads and storage
+@@ -40,6 +53,9 @@ class OpenVEXParser:
+         self.namespace = namespace
+         self.workspace = workspace
+         self.user_agent = user_agent
++        self.version_markers = normalize_version_markers(
++            DEFAULT_VERSION_MARKERS.copy() if version_markers is None else version_markers
++        )
+ 
+         if not fixdater:
+             fixdater = fixdate.default_finder(workspace)
+@@ -228,7 +244,6 @@ class OpenVEXParser:
+         :param statement: [openvex statement](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md)
+         :return: statement with only chainguard products
+         """
+-        d = {"pypi": "+cgr.", "maven": ".cgr."}
+         new_products = []
+         for product in statement.get("products", []):
+             pid = self._get_purl(product)
+@@ -237,7 +252,7 @@ class OpenVEXParser:
+                 continue
+             purl = PackageURL.from_string(pid)
+             # keep product if valid type and matches chainguard fragment for type
+-            if purl.type in d and purl.version and d[purl.type] in purl.version:
++            if purl.type in self.version_markers and purl.version and self.version_markers[purl.type] in purl.version:
+                 new_products.append(product)
+         statement["products"] = new_products
+         return statement
+diff --git a/tests/unit/cli/test_cli.py b/tests/unit/cli/test_cli.py
+index 63ac1d2..333d718 100644
+--- a/tests/unit/cli/test_cli.py
++++ b/tests/unit/cli/test_cli.py
+@@ -304,6 +304,11 @@ providers:
+       skip_download: false
+       skip_newer_archive_check: false
+       user_agent: anchore/vunnel-$VUNNEL_VERSION
++    version_markers:
++      golang: -cgr.
++      maven: .cgr.
++      npm: -cgr.
++      pypi: +cgr.
+   common:
+     import_results:
+       enabled: false
+diff --git a/tests/unit/cli/test_config.py b/tests/unit/cli/test_config.py
+index 0320c8a..76ab919 100644
+--- a/tests/unit/cli/test_config.py
++++ b/tests/unit/cli/test_config.py
+@@ -8,6 +8,35 @@ from vunnel import provider, providers, result
+ from vunnel.cli import config
+ 
+ 
++def test_chainguard_library_version_markers_merge_and_disable(tmp_path):
++    path = tmp_path / "config.yaml"
++    path.write_text("providers:\n  chainguard_libraries:\n    version_markers:\n      npm: '+custom.'\n      maven: null\n")
++    markers = config.load(path=str(path)).providers.chainguard_libraries.version_markers
++    assert markers == {"pypi": "+cgr.", "npm": "+custom.", "golang": "-cgr."}
++
++
++def test_chainguard_library_empty_marker_is_rejected(tmp_path):
++    path = tmp_path / "config.yaml"
++    path.write_text("providers:\n  chainguard_libraries:\n    version_markers:\n      npm: ''\n")
++    with pytest.raises(ValueError, match=r"empty version marker for \['npm'\]"):
++        config.load(path=str(path))
++
++
++def test_chainguard_library_non_map_marker_is_rejected(tmp_path, monkeypatch):
++    path = tmp_path / "config.yaml"
++    path.write_text("providers: {}\n")
++    monkeypatch.setenv("VUNNEL_PROVIDERS_CHAINGUARD_LIBRARIES_VERSION_MARKERS", "npm=-cgr.")
++    with pytest.raises(ValueError, match="version_markers must be a map"):
++        config.load(path=str(path))
++
++
++def test_chainguard_library_non_map_yaml_is_rejected(tmp_path):
++    path = tmp_path / "config.yaml"
++    path.write_text("providers:\n  chainguard_libraries:\n    version_markers: invalid\n")
++    with pytest.raises(ValueError, match="version_markers must be a map"):
++        config.load(path=str(path))
++
++
+ def test_minimal_config(helpers):
+     cfg_path = helpers.local_dir("test-fixtures/minimal.yaml")
+     cfg = config.load(path=cfg_path)
+diff --git a/tests/unit/providers/chainguard_libraries/test_openvex_parser.py b/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
+index d7612c9..4792353 100644
+--- a/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
++++ b/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
+@@ -31,6 +31,21 @@ def openvex_parser(tmpdir, mock_logger, auto_fake_fixdate_finder):
+ 
+ 
+ class TestOpenVEXParser:
++    def test_filters_all_default_ecosystems_and_custom_markers(self, openvex_parser):
++        products = [
++            {"identifiers": {"purl": "pkg:pypi/foo@1+cgr.1"}},
++            {"identifiers": {"purl": "pkg:maven/org/foo@1.cgr.1"}},
++            {"identifiers": {"purl": "pkg:npm/foo@1-cgr.1"}},
++            {"identifiers": {"purl": "pkg:golang/example.com/foo@1-cgr.1"}},
++            {"identifiers": {"purl": "pkg:npm/bar@1.0"}},
++            {"identifiers": {"purl": "pkg:generic/foo@1-cgr.1"}},
++        ]
++        assert openvex_parser._filter_statements({"products": products})["products"] == products[:4]
++
++        openvex_parser.version_markers = {"npm": "+special."}
++        custom = [{"identifiers": {"purl": "pkg:npm/foo@1+special.1"}}]
++        assert openvex_parser._filter_statements({"products": custom})["products"] == custom
++
+     def test_init_default_values(self, tmpdir, mock_logger, auto_fake_fixdate_finder):
+         parser = OpenVEXParser(
+             workspace=workspace.Workspace(tmpdir, "test", create=True),
+diff --git a/tests/unit/providers/chainguard_libraries/test_provider.py b/tests/unit/providers/chainguard_libraries/test_provider.py
+index a814d8c..cdfaeea 100644
+--- a/tests/unit/providers/chainguard_libraries/test_provider.py
++++ b/tests/unit/providers/chainguard_libraries/test_provider.py
+@@ -25,3 +25,10 @@ def test_provider_via_snapshot(helpers, disable_get_requests, monkeypatch, auto_
+     p.update(None)
+ 
+     workspace.assert_result_snapshots()
++
++
++def test_provider_passes_version_markers_to_parser(helpers, auto_fake_fixdate_finder):
++    workspace = helpers.provider_workspace_helper(name=Provider.name())
++    markers = {"npm": "+custom."}
++    provider = Provider(root=workspace.root, config=Config(version_markers=markers))
++    assert provider.parser.version_markers == markers

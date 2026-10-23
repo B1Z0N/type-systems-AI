@@ -1,0 +1,61 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index e56d88d..171165d 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,12 +1,18 @@
+ """Metered usage reporting and aggregation.
+ 
+-Usage record timestamps are epoch milliseconds, while billing periods are epoch seconds.
++Usage records store their timestamp in epoch seconds. The reporting interface still takes
++and returns epoch milliseconds, so sub-second precision is dropped (floored) on the way in.
+ """
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .errors import ValidationError
+ 
+ 
++def _client_view(record):
++    """Copy of a stored record with the timestamp in the epoch milliseconds clients use."""
++    return {**record, "timestamp": to_millis(record["timestamp"])}
++
++
+ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idempotency_key=None):
+     """Record `quantity` units of metered usage and return the usage record.
+ 
+@@ -16,7 +22,7 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+     metered or not on the subscription, or the quantity is negative.
+     """
+     if idempotency_key is not None and idempotency_key in ctx.store.usage_keys:
+-        return ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]]
++        return _client_view(ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]])
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] in ("canceled", "paused"):
+         raise ValidationError(f"cannot report usage on a {subscription['status']} subscription")
+@@ -32,21 +38,21 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": to_seconds(timestamp) if timestamp is not None else ctx.clock.now(),
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+     if idempotency_key is not None:
+         ctx.store.usage_keys[idempotency_key] = record["id"]
+-    return record
++    return _client_view(record)
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     """Usage records within [period_start, period_end) (epoch seconds), oldest first."""
+-    start_ms = to_millis(period_start)
+-    end_ms = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start_ms <= record["timestamp"] < end_ms
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 

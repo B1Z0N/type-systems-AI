@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 4,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Usage records now store timestamp in epoch seconds (plus a 0-999 ms remainder so the API/engine still accept and return exact milliseconds and ordering is unchanged); billing results are unchanged."
+  },
+  "answer_error": null
+}

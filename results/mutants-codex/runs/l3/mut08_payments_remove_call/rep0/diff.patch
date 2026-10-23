@@ -1,0 +1,35 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index 9f4c60c..588192c 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -45,7 +45,7 @@ def collect(ctx: Context, invoice_id: InvoiceId) -> Payment | None:
+         mark_paid(ctx, invoice, payment["amount"])
+         recover(ctx, invoice)
+     else:
+-        pass
++        record_failure(ctx, invoice, result["failure_code"] or "payment_failed")
+     return payment
+ 
+ 
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..8ce638e 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -13,6 +13,17 @@ def test_subscribe_invoices_and_charges_first_period(world):
+     assert format_date(sub["current_period_end"]) == "2026-02-15"
+ 
+ 
++def test_recovery_after_retry_succeeds(world):
++    cus = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    assert sub["status"] == "past_due"
++    world.advance_days(1)
++    assert sub["status"] == "active"
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"
++
++
+ def test_trial_converts_and_invoices(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)

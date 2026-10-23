@@ -1,0 +1,97 @@
+96 runs planned, 0 done, 96 to go
+[1/96] l0       n1_webhook_backoff           rep2 passed=True  tokens= 138,449 files= 5 wall=24s
+[2/96] l0       b2_usage_not_billed          rep2 passed=True  tokens= 184,575 files= 6 wall=30s
+[3/96] l0       i1_usage_seconds_impact      rep2 passed=True  tokens=  73,938 files= 4 wall=21s
+[4/96] l0       n1_webhook_backoff           rep1 passed=True  tokens=  86,795 files= 5 wall=18s
+[5/96] l3       c2_dunning                   rep0 passed=True  tokens= 180,850 files= 5 wall=31s
+[6/96] l0       i3_optional_returns          rep1 passed=True  tokens= 151,038 files= 0 wall=37s
+[7/96] l0       c2_dunning                   rep1 passed=True  tokens= 142,828 files= 7 wall=30s
+[8/96] l3       m2_usage_seconds             rep1 passed=True  tokens= 216,186 files= 8 wall=52s
+[9/96] l3       m3_net_terms                 rep1 passed=True  tokens= 260,061 files= 6 wall=47s
+[10/96] l3       n1_webhook_backoff           rep0 passed=True  tokens=  70,841 files= 3 wall=17s
+[11/96] l0       n5_updated_emitters          rep1 passed=True  tokens=  80,477 files= 3 wall=15s
+[12/96] l3       n5_updated_emitters          rep0 passed=True  tokens= 100,010 files= 5 wall=18s
+[13/96] l3       c3_usage_window              rep1 passed=True  tokens=  93,593 files= 6 wall=17s
+[14/96] l3       mut25_dunning_bool_swap      rep0 passed=True  tokens= 176,595 files= 4 wall=39s
+[15/96] l0       m2_usage_seconds             rep2 passed=False tokens= 421,057 files= 8 wall=75s
+[16/96] l0       c2_dunning                   rep2 passed=True  tokens= 152,940 files= 9 wall=31s
+[17/96] l0       n4_extend_trial              rep2 passed=True  tokens= 187,575 files= 4 wall=32s
+[18/96] l3       b5_no_retries                rep1 passed=True  tokens= 236,085 files= 5 wall=33s
+[19/96] l3       b1_refund_fails              rep0 passed=True  tokens= 164,942 files= 2 wall=27s
+[20/96] l3       f1_partial_refunds           rep0 passed=True  tokens= 352,349 files= 7 wall=88s
+[21/96] l0       n1_webhook_backoff           rep0 passed=True  tokens= 104,231 files= 2 wall=23s
+[22/96] l0       b1_refund_fails              rep1 passed=True  tokens= 150,423 files= 3 wall=26s
+[23/96] l0       i1_usage_seconds_impact      rep1 passed=True  tokens=  94,531 files= 5 wall=21s
+[24/96] l0       b3_no_card_dunning           rep0 passed=True  tokens= 132,449 files= 3 wall=27s
+[25/96] l3       i1_usage_seconds_impact      rep2 passed=True  tokens= 114,772 files= 8 wall=23s
+[26/96] l0       mut25_dunning_bool_swap      rep0 passed=True  tokens= 161,920 files= 3 wall=34s
+[27/96] l0       b2_usage_not_billed          rep1 passed=True  tokens= 210,378 files= 7 wall=35s
+[28/96] l0       b5_no_retries                rep2 passed=True  tokens= 182,533 files= 3 wall=31s
+[29/96] l3       mut25_dunning_bool_swap      rep2 passed=True  tokens= 223,270 files= 4 wall=34s
+[30/96] l3       m3_net_terms                 rep0 passed=True  tokens= 212,327 files= 6 wall=42s
+[31/96] l0       f1_partial_refunds           rep1 passed=True  tokens= 377,391 files=13 wall=87s
+[32/96] l3       b5_no_retries                rep2 passed=True  tokens= 161,877 files= 3 wall=29s
+[33/96] l3       n4_extend_trial              rep2 passed=True  tokens= 150,485 files= 2 wall=28s
+[34/96] l0       m3_net_terms                 rep1 passed=True  tokens= 248,314 files= 7 wall=50s
+[35/96] l3       mut46_reports_arith_swap     rep2 passed=True  tokens= 135,050 files= 2 wall=25s
+[36/96] l0       mut46_reports_arith_swap     rep1 passed=True  tokens= 136,618 files= 2 wall=19s
+[37/96] l0       b5_no_retries                rep1 passed=True  tokens= 193,043 files= 4 wall=33s
+[38/96] l3       b3_no_card_dunning           rep1 passed=True  tokens= 237,876 files= 5 wall=40s
+[39/96] l0       m3_net_terms                 rep2 passed=True  tokens= 291,202 files= 6 wall=44s
+[40/96] l3       mut46_reports_arith_swap     rep0 passed=True  tokens=  46,105 files= 1 wall=13s
+[41/96] l0       i3_optional_returns          rep2 passed=True  tokens= 140,069 files=29 wall=35s
+[42/96] l0       c3_usage_window              rep1 passed=True  tokens=  82,041 files= 5 wall=13s
+[43/96] l3       b2_usage_not_billed          rep1 passed=True  tokens= 315,184 files= 9 wall=44s
+[44/96] l0       b1_refund_fails              rep2 passed=True  tokens= 151,714 files= 3 wall=26s
+[45/96] l0       n5_updated_emitters          rep0 passed=True  tokens=  83,652 files= 3 wall=18s
+[46/96] l0       b2_usage_not_billed          rep0 passed=True  tokens= 281,246 files= 7 wall=42s
+[47/96] l0       mut25_dunning_bool_swap      rep1 passed=True  tokens= 237,328 files= 4 wall=43s
+[48/96] l3       b5_no_retries                rep0 passed=True  tokens= 154,416 files= 4 wall=22s
+[49/96] l3       i1_usage_seconds_impact      rep0 passed=True  tokens=  76,586 files= 3 wall=17s
+[50/96] l3       b3_no_card_dunning           rep0 passed=True  tokens=  79,676 files= 3 wall=16s
+[51/96] l3       b1_refund_fails              rep1 passed=True  tokens= 151,653 files= 2 wall=27s
+[52/96] l3       c2_dunning                   rep2 passed=True  tokens= 182,617 files= 6 wall=28s
+[53/96] l3       b2_usage_not_billed          rep0 passed=True  tokens= 336,902 files= 6 wall=48s
+[54/96] l0       b3_no_card_dunning           rep1 passed=True  tokens= 184,019 files= 3 wall=27s
+[55/96] l3       n4_extend_trial              rep1 passed=True  tokens= 169,449 files= 2 wall=28s
+[56/96] l0       n4_extend_trial              rep1 passed=True  tokens= 135,743 files= 4 wall=23s
+[57/96] l3       n4_extend_trial              rep0 passed=True  tokens= 185,077 files= 4 wall=35s
+[58/96] l0       c2_dunning                   rep0 passed=True  tokens= 144,940 files= 8 wall=33s
+[59/96] l3       b2_usage_not_billed          rep2 passed=True  tokens= 257,937 files= 5 wall=37s
+[60/96] l0       mut46_reports_arith_swap     rep2 passed=True  tokens= 216,801 files= 3 wall=39s
+[61/96] l3       i1_usage_seconds_impact      rep1 passed=True  tokens=  97,091 files= 5 wall=20s
+[62/96] l0       c3_usage_window              rep0 passed=True  tokens=  69,196 files= 4 wall=14s
+[63/96] l3       m2_usage_seconds             rep2 passed=True  tokens= 390,781 files= 8 wall=80s
+[64/96] l3       m3_net_terms                 rep2 passed=True  tokens= 346,426 files= 5 wall=57s
+[65/96] l3       n1_webhook_backoff           rep2 passed=True  tokens=  82,112 files= 2 wall=17s
+[66/96] l0       b3_no_card_dunning           rep2 passed=True  tokens= 146,348 files= 3 wall=27s
+[67/96] l3       m2_usage_seconds             rep0 passed=True  tokens= 289,743 files= 8 wall=54s
+[68/96] l3       n1_webhook_backoff           rep1 passed=True  tokens= 111,982 files= 6 wall=20s
+[69/96] l0       m2_usage_seconds             rep1 passed=False tokens= 186,441 files= 3 wall=44s
+[70/96] l3       f1_partial_refunds           rep2 passed=True  tokens= 389,899 files=12 wall=92s
+[71/96] l3       f1_partial_refunds           rep1 passed=True  tokens= 528,078 files=11 wall=95s
+[72/96] l3       i3_optional_returns          rep0 passed=True  tokens= 240,857 files=22 wall=32s
+[73/96] l0       i1_usage_seconds_impact      rep0 passed=True  tokens=  64,700 files= 3 wall=18s
+[74/96] l0       m3_net_terms                 rep0 passed=True  tokens= 246,344 files= 6 wall=48s
+[75/96] l3       mut25_dunning_bool_swap      rep1 passed=True  tokens= 193,965 files= 4 wall=40s
+[76/96] l0       b1_refund_fails              rep0 passed=True  tokens=  89,311 files= 2 wall=19s
+[77/96] l0       m2_usage_seconds             rep0 passed=False tokens= 177,044 files= 6 wall=51s
+[78/96] l3       b1_refund_fails              rep2 passed=True  tokens= 143,477 files= 2 wall=28s
+[79/96] l0       mut25_dunning_bool_swap      rep2 passed=True  tokens= 213,184 files= 4 wall=41s
+[80/96] l0       i3_optional_returns          rep0 passed=True  tokens= 150,017 files= 0 wall=33s
+[81/96] l3       mut46_reports_arith_swap     rep1 passed=True  tokens= 160,945 files= 1 wall=26s
+[82/96] l0       n5_updated_emitters          rep2 passed=True  tokens=  96,591 files= 3 wall=16s
+[83/96] l3       n5_updated_emitters          rep1 passed=True  tokens=  89,528 files= 4 wall=16s
+[84/96] l0       b5_no_retries                rep0 passed=True  tokens= 109,157 files= 3 wall=19s
+[85/96] l3       b3_no_card_dunning           rep2 passed=True  tokens= 171,300 files= 5 wall=34s
+[86/96] l0       f1_partial_refunds           rep0 passed=True  tokens= 484,992 files=14 wall=96s
+[87/96] l0       n4_extend_trial              rep0 passed=True  tokens= 141,138 files= 4 wall=27s
+[88/96] l3       i3_optional_returns          rep1 passed=True  tokens= 210,268 files=30 wall=41s
+[89/96] l3       c3_usage_window              rep0 passed=True  tokens=  72,420 files= 4 wall=12s
+[90/96] l3       i3_optional_returns          rep2 passed=True  tokens= 221,208 files=30 wall=36s
+[91/96] l0       f1_partial_refunds           rep2 passed=True  tokens= 299,298 files= 7 wall=69s
+[92/96] l3       n5_updated_emitters          rep2 passed=True  tokens= 121,614 files= 4 wall=24s
+[93/96] l0       mut46_reports_arith_swap     rep0 passed=True  tokens=  95,141 files= 1 wall=22s
+[94/96] l0       c3_usage_window              rep2 passed=True  tokens=  67,989 files= 5 wall=14s
+[95/96] l3       c3_usage_window              rep2 passed=True  tokens=  79,107 files= 6 wall=15s
+[96/96] l3       c2_dunning                   rep1 passed=True  tokens=  92,123 files= 5 wall=30s

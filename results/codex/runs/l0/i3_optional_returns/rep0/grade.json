@@ -1,0 +1,31 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "sets": {
+    "functions": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "missed": [],
+      "false_positives": []
+    }
+  },
+  "answer": {
+    "functions": [
+      "billing.api._match",
+      "billing.api._optional_str",
+      "billing.catalog.find_price",
+      "billing.customers.default_payment_method",
+      "billing.engine.BillingEngine._renew",
+      "billing.engine.BillingEngine.pay",
+      "billing.payments.collect",
+      "billing.store.Store.get_coupon",
+      "billing.store.Store.get_customer",
+      "billing.store.Store.get_invoice",
+      "billing.store.Store.get_price",
+      "billing.store.Store.get_subscription",
+      "billing.tax.lookup"
+    ]
+  },
+  "answer_error": null
+}

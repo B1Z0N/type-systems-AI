@@ -1,0 +1,32 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index fe659be..222f548 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -24,7 +24,7 @@ def monthly_amount(ctx, subscription):
+ def mrr(ctx):
+     totals = {}
+     for subscription in ctx.store.subscriptions.values():
+-        if subscription["customer_id"] not in ("active", "past_due"):
++        if subscription["status"] not in ("active", "past_due"):
+             continue
+         currency = ctx.store.require_customer(subscription["customer_id"])["currency"]
+         totals[currency] = totals.get(currency, 0) + monthly_amount(ctx, subscription)
+diff --git a/tests/test_reports_regression.py b/tests/test_reports_regression.py
+new file mode 100644
+index 0000000..962854c
+--- /dev/null
++++ b/tests/test_reports_regression.py
+@@ -0,0 +1,13 @@
++from billing import catalog, reports
++
++
++def test_mrr_and_aging(world):
++    yearly = catalog.create_price(world.ctx, world.plan["id"], "usd", "flat", unit_amount=12000, interval="year")
++    a = world.customer()
++    b = world.customer(email="b@example.com", card=False)
++    world.engine.subscribe(a["id"], [(world.monthly["id"], 3)])
++    world.engine.subscribe(b["id"], [(yearly["id"], 1)])
++    assert reports.mrr(world.ctx) == {"usd": 3000 + 1000}
++    world.clock.advance_days(40)
++    aging = reports.aging(world.ctx, world.clock.now())
++    assert aging["usd"]["31-60"] == 12000

@@ -1,0 +1,1 @@
+{"summary": "Made Chainguard library version markers configurable with npm and golang defaults, key-wise config merging, validation, and CLI output."}

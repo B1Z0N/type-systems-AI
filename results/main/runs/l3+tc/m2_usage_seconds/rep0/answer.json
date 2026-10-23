@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds (plus a sub-second ms remainder field so ordering and the API echo are unchanged), while inputs and the POST /usage response stay in milliseconds."}

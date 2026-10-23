@@ -1,0 +1,15 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 16c80af..c60e6f5 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -61,7 +61,9 @@ def due_for_retry(ctx, now):
+     due_invoices = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "open" or invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
++        if invoice["status"] == "open"
++        and invoice["next_attempt_at"] is not None
++        and invoice["next_attempt_at"] <= now
+     ]
+     due_invoices.sort(key=lambda invoice: (invoice["next_attempt_at"], invoice["id"]))
+     return [invoice["id"] for invoice in due_invoices]

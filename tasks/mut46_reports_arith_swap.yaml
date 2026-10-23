@@ -1,0 +1,27 @@
+id: mut46_reports_arith_swap
+category: bugfix
+stratum: type_neutral
+title: MRR report shows negative revenue
+read_only: false
+checker_catches_at: none
+relevant_files:
+- reports.py
+mutations:
+- file: reports.py
+  find: |2
+            totals[currency] = Cents(totals.get(currency, Cents(0)) + monthly_amount(ctx, subscription))
+  replace: |2
+            totals[currency] = Cents(totals.get(currency, Cents(0)) - monthly_amount(ctx, subscription))
+prompt: |
+  The MRR report (`reports.mrr`) returns negative numbers. For example, with one customer paying
+  30.00 USD per month and another paying 120.00 USD per year, it reports -40.00 USD instead of
+  40.00 USD. Find the root cause and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: reports.py
+  function: mrr
+grader:
+  type: tests
+  target_tests:
+  - base/test_webhooks_reports_api.py::test_mrr_and_aging

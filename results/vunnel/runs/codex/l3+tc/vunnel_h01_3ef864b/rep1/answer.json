@@ -1,0 +1,1 @@
+{"summary": "Made Chainguard library version markers configurable by ecosystem, including npm and golang defaults, key-wise overrides, validation, and CLI output."}

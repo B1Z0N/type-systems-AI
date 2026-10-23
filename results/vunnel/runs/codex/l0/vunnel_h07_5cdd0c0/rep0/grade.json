@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Fixed Wolfi and Chainguard secdb parsing for non-CVE and non-GHSA vulnerability IDs by retaining the distro security reference link."
+  },
+  "answer_error": null
+}

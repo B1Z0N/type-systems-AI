@@ -1,0 +1,27 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+
+
+def test_recovery_after_retry_succeeds(world):
+    cus = world.customer()
+    world.gateway.fail_next.append("card_declined")
+    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+    assert sub["status"] == "past_due"
+    world.advance_days(1)
+    assert sub["status"] == "active"
+    [inv] = world.engine.invoices_for(cus["id"])
+    assert inv["status"] == "paid"
+```
+
+It fails with:
+
+```
+AssertionError: assert 'active' == 'past_due'
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

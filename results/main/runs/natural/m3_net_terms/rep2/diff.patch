@@ -1,0 +1,119 @@
+diff --git a/billing/api.py b/billing/api.py
+index 530f179..4dd2cdf 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -55,6 +55,7 @@ def create_customer(engine, _, body):
+         _required_str(body, "name"),
+         _optional_str(body, "currency") or "usd",
+         tax_region=_optional_str(body, "tax_region"),
++        net_terms_days=_int(body, "net_terms_days", 7),
+     )
+     return 201, customer_json(customer)
+ 
+diff --git a/billing/customers.py b/billing/customers.py
+index 3b2a672..554ae6b 100644
+--- a/billing/customers.py
++++ b/billing/customers.py
+@@ -4,7 +4,7 @@ import hashlib
+ 
+ from .errors import InvalidStateError, ValidationError
+ from .events import emit
+-from .models import DEFAULT_CURRENCY
++from .models import DEFAULT_CURRENCY, INVOICE_NET_DAYS
+ from .money import is_supported
+ from .serialization import customer_json
+ 
+@@ -21,12 +21,29 @@ def _normalize_email(email):
+     return normalized
+ 
+ 
+-def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None, tax_exempt=False, metadata=None):
++def _validate_net_terms(days):
++    """Return `days` if it is a non-negative integer; raises ValidationError otherwise."""
++    if isinstance(days, bool) or not isinstance(days, int) or days < 0:
++        raise ValidationError("net_terms_days must be a non-negative integer")
++    return days
++
++
++def create_customer(
++    ctx,
++    email,
++    name,
++    currency=DEFAULT_CURRENCY,
++    tax_region=None,
++    tax_exempt=False,
++    metadata=None,
++    net_terms_days=INVOICE_NET_DAYS,
++):
+     """Create a customer billed in `currency` and emit "customer.created".
+ 
+     `tax_region` is a region code such as "US-CA" (stored upper-case) used for tax
+-    lookup; `metadata` is copied. Raises ValidationError for an unsupported currency or
+-    a malformed email.
++    lookup; `metadata` is copied; `net_terms_days` is how many days after finalization
++    the customer's invoices fall due. Raises ValidationError for an unsupported currency or
++    a malformed email or a negative `net_terms_days`.
+     """
+     if not is_supported(currency):
+         raise ValidationError(f"unsupported currency: {currency}")
+@@ -39,6 +56,7 @@ def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None
+         "currency": currency,
+         "tax_region": tax_region.upper() if tax_region else None,
+         "tax_exempt": tax_exempt,
++        "net_terms_days": _validate_net_terms(net_terms_days),
+         "default_payment_method": None,
+         "created_at": ctx.clock.now(),
+         "metadata": dict(metadata or {}),
+@@ -48,7 +66,7 @@ def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None
+     return customer
+ 
+ 
+-def update_customer(ctx, customer_id, *, email=None, name=None, tax_region=None, tax_exempt=None):
++def update_customer(ctx, customer_id, *, email=None, name=None, tax_region=None, tax_exempt=None, net_terms_days=None):
+     """Update the given fields (None means "leave unchanged") and emit "customer.updated".
+ 
+     Passing `tax_region=""` clears the region. Fields are applied one by one, so an
+@@ -63,6 +81,8 @@ def update_customer(ctx, customer_id, *, email=None, name=None, tax_region=None,
+         customer["tax_region"] = tax_region.upper() or None
+     if tax_exempt is not None:
+         customer["tax_exempt"] = tax_exempt
++    if net_terms_days is not None:
++        customer["net_terms_days"] = _validate_net_terms(net_terms_days)
+     emit(ctx, "customer.updated", {"customer": customer_json(customer)})
+     return customer
+ 
+diff --git a/billing/invoices.py b/billing/invoices.py
+index 4329abf..4757157 100644
+--- a/billing/invoices.py
++++ b/billing/invoices.py
+@@ -10,7 +10,7 @@ from .discounts import applies_this_period, line_discounts
+ from .errors import CurrencyMismatchError, InvalidStateError, ValidationError
+ from .events import emit
+ from .ledger import apply_credit, restore_credit
+-from .models import INVOICE_NET_DAYS, SECONDS_PER_DAY
++from .models import SECONDS_PER_DAY
+ from .money import total
+ from .pricing import amount_for_quantity
+ from .serialization import invoice_json
+@@ -247,7 +247,8 @@ def finalize(ctx, invoice_id):
+     invoice["status"] = "open"
+     invoice["number"] = ctx.store.next_invoice_number()
+     invoice["finalized_at"] = now
+-    invoice["due_at"] = now + INVOICE_NET_DAYS * SECONDS_PER_DAY
++    customer = ctx.store.require_customer(invoice["customer_id"])
++    invoice["due_at"] = now + customer["net_terms_days"] * SECONDS_PER_DAY
+     apply_credit(ctx, invoice)
+     emit(ctx, "invoice.finalized", {"invoice": invoice_json(invoice)})
+     if invoice["amount_due"] == 0:
+diff --git a/billing/serialization.py b/billing/serialization.py
+index bff4cef..24495f3 100644
+--- a/billing/serialization.py
++++ b/billing/serialization.py
+@@ -15,6 +15,7 @@ def customer_json(customer):
+         "currency": customer["currency"],
+         "tax_region": customer["tax_region"],
+         "tax_exempt": customer["tax_exempt"],
++        "net_terms_days": customer["net_terms_days"],
+     }
+ 
+ 

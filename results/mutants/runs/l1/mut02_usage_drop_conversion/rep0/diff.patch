@@ -1,0 +1,13 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 1c94cbf..8c68e7f 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -41,7 +41,7 @@ def report_usage(
+ 
+ def records_in_period(ctx: Context, subscription_id: str, price_id: str, period_start: int, period_end: int) -> list:
+     start = to_millis(period_start)
+-    end = period_end
++    end = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
+     ]

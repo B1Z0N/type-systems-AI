@@ -1,0 +1,1 @@
+{"summary": "SecDBParser.build_reference_links now tolerates ids without CVE-/GHSA- prefix, falling back to just the distro security page URL."}

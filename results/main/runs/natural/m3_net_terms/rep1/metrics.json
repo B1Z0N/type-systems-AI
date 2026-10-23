@@ -1,0 +1,126 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 5,
+  "duration_ms": 23336,
+  "api_duration_ms": 22671,
+  "cost_usd": 0.0742059,
+  "input_tokens": 10,
+  "output_tokens": 2553,
+  "cache_read_tokens": 52839,
+  "cache_write_tokens": 10843,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 63692,
+  "tool_calls": 4,
+  "tool_calls_by_kind": {
+    "read": 3,
+    "answer": 1
+  },
+  "reads": 3,
+  "searches": 0,
+  "edits": 0,
+  "test_runs": 0,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "customers.py",
+    "invoices.py",
+    "serialization.py"
+  ],
+  "files_edited": [],
+  "unique_files_edited": 0,
+  "unique_files_read": 4,
+  "rereads": 0,
+  "read_chars": 12533,
+  "search_chars": 0,
+  "tool_output_chars": 13046,
+  "relevant_files_read": 3,
+  "exploration_precision": 0.75,
+  "exploration_recall": 0.6,
+  "steps_before_first_edit": null,
+  "final_message": "Customers now have a `net_terms_days` setting (default 7), and finalizing an invoice sets `due_at` from the customer's current value. The existing 24 tests pass. I didn't add tests for the new behaviour, so the negative-value 400 and the custom-terms `due_at` are untested.\n\n- **Create and update:** `create_customer` and `update_customer` both accept `net_terms_days`, and `POST /customers` takes it in the body.\n- **Validation:** A negative value raises `ValidationError`, which the API returns as a 400. I also reject non-integers and booleans, which you didn't ask for.\n- **Finalize:** `invoices.finalize` looks up the customer at finalization time, so changing a customer's terms affects invoices finalized after that. Invoices already finalized keep their old `due_at`.\n- **Customer JSON:** I added `net_terms_days` to `customer_json`. That means the `customer.created` and `customer.updated` events now include it, and so do API responses.\n\nI wrote `answer.json` in the repo root as requested.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/customers.py"
+      ],
+      "read_paths": [
+        "billing/customers.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && cat billing/customers.py && grep -rn \"7\\|due_at\\|NET\" --include=*.py billing | grep -v \"^billing/customers.py\"",
+      "output_chars": 6877,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "grep -rn \"due_at\\|DAYS\\|_DAY\\|tax_exempt\" billing | grep -v \"^billing/customers.py\"; grep -n \"customer\" billing/api.py | head -40",
+      "output_chars": 1944,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/api.py",
+        "billing/invoices.py",
+        "billing/serialization.py"
+      ],
+      "read_paths": [
+        "billing/api.py",
+        "billing/invoices.py",
+        "billing/serialization.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "sed -n 15,60p billing/api.py; sed -n 225,255p billing/invoices.py; sed -n 8,30p billing/serialization.py; grep -rn \"INVOICE_NET_DAYS\" . --include=*.py --include=*.md",
+      "output_chars": 3712,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Bash",
+      "paths": [
+        "answer.json",
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "run",
+        "vcs"
+      ],
+      "command": "python3 - <<'E'\nimport re\np='billing/customers.py'; s=open(p).read()\ns=s.replace(\"from .models import DEFAULT_CURRENCY\",\"from .models import DEFAULT_CURRENCY, INVOICE_NET_DAYS\")\ns=s.replace('''def create_customer(ctx, email, name, currency=DEFAULT_CURRENCY, tax_region=None, tax_exempt=False, metadata=None):''','''def _check_net_terms(days):\n    \"\"\"Raise ValidationError unless `days` is a non-negative integer.\"\"\"\n    if isinstance(days, bool) or not isinstance(days, int) or days < 0:\n        raise ValidationError(\"net_terms_days must be a non-negative integer\")\n    return days\n\n\ndef create_customer(\n    ctx,\n    email,\n    name,\n    currency=DEFAULT_CURRENCY,\n    tax_region=None,\n    tax_exempt=False,\n    metadata=None,\n    net_terms_days=INVOICE_NET_DAYS,\n):''')\ns=s.replace('''a malformed email.\n    \"\"\"\n    if not is_supported(currency):\n        raise ValidationError(f\"unsupported currency: {currency}\")\n''','''a malformed email or a negative `net_terms_days` (days until finalized invoices are due).\n    \"\"\"\n    if not is_supported(currency):\n        raise ValidationError(f\"unsupported currency: {currency}\")\n    _check_net_terms(net_terms_days)\n''')\ns=s.replace('''        \"tax_exempt\": tax_exempt,\n        \"default''','''        \"tax_exempt\": tax_exempt,\n        \"net_terms_days\": net_terms_days,\n        \"default''')\ns=s.replace(\"tax_region=None, tax_exempt=None):\",\"tax_region=None, tax_exempt=None, net_terms_days=None):\")\ns=s.replace('''    customer = ctx.store.require_customer(customer_id)\n    if email is not None:''','''    customer = ctx.store.require_customer(customer_id)\n    if net_terms_days is not None:\n        _check_net_terms(net_terms_days)\n    if email is not None:''')\ns=s.replace('''        customer[\"tax_exempt\"] = tax_exempt\n    emit''','''        customer[\"tax_exempt\"] = tax_exempt\n    if net_terms_days is not None:\n        customer[\"net_terms_days\"] = net_terms_days\n    emit''')\nopen(p,'w').write(s)\n\np='billing/invoices.py'; s=open(p).read()\ns=s.replace('''    invoice[\"due_at\"] = now + INVOICE_NET_DAYS * SECONDS_PER_DAY''','''    customer = ctx.store.require_customer(invoice[\"customer_id\"])\n    net_days = customer.get(\"net_terms_days\", INVOICE_NET_DAYS)\n    invoice[\"due_at\"] = now + net_days * SECONDS_PER_DAY''')\nopen(p,'w').write(s)\n\np='billing/api.py'; s=open(p).read()\ns=s.replace('''        tax_region=_optional_str(body, \"tax_region\"),\n    )\n    return 201, customer_json''','''        tax_region=_optional_str(body, \"tax_region\"),\n        net_terms_days=_int(body, \"net_terms_days\", 7),\n    )\n    return 201, customer_json''')\nopen(p,'w').write(s)\n\np='billing/serialization.py'; s=open(p).read()\ns=s.replace('''        \"tax_exempt\": customer[\"tax_exempt\"],\n    }''','''        \"tax_exempt\": customer[\"tax_exempt\"],\n        \"net_terms_days\": customer[\"net_terms_days\"],\n    }''',1)\nopen(p,'w').write(s)\nE\ngrep -n \"customer_id\" billing/invoices.py | head -3\necho '{\"summary\": \"Added a per-customer net_terms_days setting (default 7, validated non-negative) to create/update/API and used it for due_at at invoice finalization.\"}' > answer.json\n.venv/bin/python -m pytest -q 2>&1 | tail -5; git diff --stat",
+      "output_chars": 513,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 24.1,
+  "timed_out": false,
+  "exit_code": 0
+}

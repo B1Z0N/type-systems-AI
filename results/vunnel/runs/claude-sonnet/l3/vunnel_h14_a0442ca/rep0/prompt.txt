@@ -1,0 +1,17 @@
+Some Oracle Linux advisories (ELSAs) list different fixed versions for the same package on
+the same Oracle Linux release depending on CPU architecture. For example ELSA-2022-4803 fixes
+rsyslog at `8.24.0-57.0.4.el7_9.3` on aarch64 but `8.24.0-57.0.1.el7_9.3` on x86_64. The
+oracle provider currently keeps only one, which produces wrong matches on one of the arches.
+
+- When the architecture actually differentiates the fix, emit one `FixedIn` entry per
+  (version, architecture) with an `Arch` key (e.g. `"Arch": "aarch64"`).
+- When one fix is shared by every architecture, or several rebuilds each ship for all
+  architectures, emit arch-less `FixedIn` entries (no `Arch` key), one per version, with no
+  per-arch duplicates.
+- `Arch` is a new optional field: add OS vulnerability schema version 1.1.1
+  (`schema/vulnerability/os/schema-1.1.1.json`, 1.1.0 plus the optional `FixedIn.Arch` string)
+  and have only the oracle provider advertise 1.1.1. Other providers stay on their current
+  schema version.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

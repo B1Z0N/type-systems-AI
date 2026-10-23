@@ -1,0 +1,51 @@
+diff --git a/src/vunnel/providers/wolfi/parser.py b/src/vunnel/providers/wolfi/parser.py
+index ffd66d5..7d4a7db 100644
+--- a/src/vunnel/providers/wolfi/parser.py
++++ b/src/vunnel/providers/wolfi/parser.py
+@@ -62,9 +62,8 @@ class Parser(abc.ABC):
+         return os.path.basename(urlparse(url).path)
+ 
+     def build_reference_links(self, vulnerability_id):
+-        urls = []
+-        urls.append(f"{self.security_reference_url}/{vulnerability_id}")
+-        urls.extend(vulnerability.build_reference_links(vulnerability_id))
++        urls = [f"{self.security_reference_url}/{vulnerability_id}"]
++        urls.extend(vulnerability.build_reference_links(vulnerability_id) or [])
+         return urls
+ 
+     @abc.abstractmethod
+diff --git a/tests/unit/providers/wolfi/test_wolfi.py b/tests/unit/providers/wolfi/test_wolfi.py
+index e88bf5c..6047b95 100644
+--- a/tests/unit/providers/wolfi/test_wolfi.py
++++ b/tests/unit/providers/wolfi/test_wolfi.py
+@@ -22,6 +22,30 @@ OSV_SCHEMA_PATH = (
+ 
+ 
+ class TestParser:
++    @pytest.mark.parametrize("namespace", ["wolfi", "chainguard"])
++    def test_secdb_reference_links_for_unknown_id(self, tmpdir, auto_fake_fixdate_finder, namespace):
++        p = SecDBParser(
++            workspace=workspace.Workspace(tmpdir, "test", create=True),
++            url="https://example.com/security.json",
++            namespace=namespace,
++        )
++        go_id = "GO-2026-5932"
++        cve_id = "CVE-2022-30065"
++
++        assert p.build_reference_links(go_id) == [f"{p.security_reference_url}/{go_id}"]
++        assert p.build_reference_links(cve_id) == [
++            f"{p.security_reference_url}/{cve_id}",
++            f"https://www.cve.org/CVERecord?id={cve_id}",
++            f"https://nvd.nist.gov/vuln/detail/{cve_id}",
++        ]
++
++        records = p._normalize(
++            "rolling",
++            {"packages": [{"pkg": {"name": "go", "secfixes": {"1.0-r1": [go_id, cve_id]}}}]},
++        )
++        assert records[go_id]["Vulnerability"]["Link"] == f"{p.security_reference_url}/{go_id}"
++        assert records[cve_id]["Vulnerability"]["Link"] == f"{p.security_reference_url}/{cve_id}"
++
+     @pytest.fixture()
+     def mock_raw_data(self, helpers):
+         """

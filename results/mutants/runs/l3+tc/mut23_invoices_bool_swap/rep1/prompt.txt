@@ -1,0 +1,28 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+from billing import discounts
+
+
+def test_percent_coupon_once(world):
+    cus = world.customer()
+    coupon = discounts.create_coupon(world.ctx, "20OFF", percent_off=2000)
+    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], coupon_id=coupon["id"])
+    world.advance_days(31)
+    first, second = world.engine.invoices_for(cus["id"])
+    assert first["discount_total"] == 200
+    assert first["total"] == 800
+    assert second["discount_total"] == 0
+```
+
+It fails with:
+
+```
+assert 200 == 0
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

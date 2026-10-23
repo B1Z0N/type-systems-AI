@@ -1,0 +1,1 @@
+{"summary": "The oracle provider now emits per-architecture FixedIn entries (with an Arch key) when the fix differs by arch and arch-less entries otherwise, and advertises the new OS schema 1.1.1 with an optional FixedIn.Arch."}

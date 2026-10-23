@@ -1,0 +1,31 @@
+diff --git a/billing/invoices.py b/billing/invoices.py
+index f4dba23..455e3cb 100644
+--- a/billing/invoices.py
++++ b/billing/invoices.py
+@@ -113,7 +113,7 @@ def apply_discounts(ctx, invoice, subscription):
+     if subscription is None or subscription["coupon_id"] is None:
+         return
+     coupon = ctx.store.get_coupon(subscription["coupon_id"])
+-    if coupon is None and not applies_this_period(coupon, subscription["coupon_periods_used"]):
++    if coupon is None or not applies_this_period(coupon, subscription["coupon_periods_used"]):
+         return
+     discounts = line_discounts(coupon, invoice["lines"], invoice["currency"], plan_lookup(ctx, invoice["lines"]))
+     for line, discount in zip(invoice["lines"], discounts):
+diff --git a/tests/test_percent_once.py b/tests/test_percent_once.py
+new file mode 100644
+index 0000000..286c4ed
+--- /dev/null
++++ b/tests/test_percent_once.py
+@@ -0,0 +1,12 @@
++from billing import discounts
++
++
++def test_percent_coupon_once(world):
++    cus = world.customer()
++    coupon = discounts.create_coupon(world.ctx, "20OFF", percent_off=2000)
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], coupon_id=coupon["id"])
++    world.advance_days(31)
++    first, second = world.engine.invoices_for(cus["id"])
++    assert first["discount_total"] == 200
++    assert first["total"] == 800
++    assert second["discount_total"] == 0

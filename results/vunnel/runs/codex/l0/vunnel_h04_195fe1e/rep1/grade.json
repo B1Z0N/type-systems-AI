@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 3,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "AlmaLinux OSV advisories now include deterministic published-date fixes for every fixed range, including cloned library packages."
+  },
+  "answer_error": null
+}

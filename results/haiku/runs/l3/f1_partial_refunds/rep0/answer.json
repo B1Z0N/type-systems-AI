@@ -1,0 +1,1 @@
+{"summary": "Added optional minor-unit `amount` to refunds (engine, Python API, and POST /invoices/{id}/refund) that refunds oldest successful payments first, tracks partially_refunded payments, creates one refunded credit note per refund, and keeps the no-amount full-refund behaviour including returning applied credit once."}

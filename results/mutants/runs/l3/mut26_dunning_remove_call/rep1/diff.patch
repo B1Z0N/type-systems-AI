@@ -1,0 +1,31 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index ea684ca..704adec 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -39,7 +39,7 @@ def record_failure(ctx: Context, invoice: Invoice, failure_code: str) -> None:
+         return
+     action = policy["final_action"]
+     if action == "cancel":
+-        pass
++        mark_uncollectible(ctx, invoice["id"])
+         transition(ctx, subscription, "canceled")
+     elif action == "pause":
+         transition(ctx, subscription, "paused")
+diff --git a/tests/test_dunning_cancel.py b/tests/test_dunning_cancel.py
+new file mode 100644
+index 0000000..241df1c
+--- /dev/null
++++ b/tests/test_dunning_cancel.py
+@@ -0,0 +1,12 @@
++
++
++def test_cancel_policy_marks_uncollectible():
++    from conftest import World
++
++    w = World({"retry_offsets_days": [2], "final_action": "cancel"})
++    cus = w.customer(last4="9995")
++    sub = w.engine.subscribe(cus["id"], [(w.monthly["id"], 1)])
++    w.advance_days(2)
++    [inv] = w.engine.invoices_for(cus["id"])
++    assert inv["status"] == "uncollectible"
++    assert sub["status"] == "canceled"

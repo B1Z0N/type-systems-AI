@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added configurable customer net terms with validation and applied the current terms when finalizing invoices."
+  },
+  "answer_error": null
+}

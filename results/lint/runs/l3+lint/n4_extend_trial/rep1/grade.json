@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 3,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added subscriptions.extend_trial, which validates days, requires a trialing subscription, shifts trial_end and current_period_end later, and emits subscription.updated."
+  },
+  "answer_error": null
+}

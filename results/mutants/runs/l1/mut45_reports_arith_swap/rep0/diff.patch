@@ -1,0 +1,13 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index bb2ee98..58f8a86 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -40,7 +40,7 @@ def revenue_between(ctx: Context, start: int, end: int) -> dict:
+         if paid_at is None or not start <= paid_at < end:
+             continue
+         credited = sum(note["amount"] for note in ctx.store.credit_notes_for(invoice["id"]))
+-        net = invoice["amount_paid"] + credited
++        net = invoice["amount_paid"] - credited
+         currency = invoice["currency"]
+         totals[currency] = totals.get(currency, 0) + net
+     return totals

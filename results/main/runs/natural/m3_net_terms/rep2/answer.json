@@ -1,0 +1,1 @@
+{"summary": "Added a per-customer net_terms_days setting (default 7, validated non-negative) to create/update customer and POST /customers, and invoice finalization now uses it for due_at."}

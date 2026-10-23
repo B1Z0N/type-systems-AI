@@ -1,0 +1,38 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index a701499..94ca9af 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -50,7 +50,7 @@ def refund_invoice(ctx, invoice_id, reason="requested_by_customer"):
+         raise InvalidStateError("only paid invoices can be refunded")
+     if credited_total(ctx, invoice_id) > 0:
+         raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(ctx, invoice["customer_id"])
++    payments = successful_payments(ctx, invoice_id)
+     refunded_total = 0
+     for payment in payments:
+         refundable_amount = payment["amount"] - payment["refunded_amount"]
+diff --git a/tests/test_credit_notes.py b/tests/test_credit_notes.py
+index 26befa7..7ea9532 100644
+--- a/tests/test_credit_notes.py
++++ b/tests/test_credit_notes.py
+@@ -11,3 +11,20 @@ def test_credit_note_limits(world):
+     assert ledger.balance(world.ctx, cus["id"]) == 400
+     with pytest.raises(Exception):
+         refunds.credit_invoice(world.ctx, inv["id"], 700, "too much")
++
++
++def test_refund_only_returns_payment_for_requested_invoice(world):
++    customer = world.customer()
++    world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    world.engine.subscribe(customer["id"], [(world.team_monthly["id"], 1)])
++    first_invoice, second_invoice = world.engine.invoices_for(customer["id"])
++    first_payment = world.ctx.store.payments_for_invoice(first_invoice["id"])[0]
++    second_payment = world.ctx.store.payments_for_invoice(second_invoice["id"])[0]
++
++    note = world.engine.refund(second_invoice["id"])
++
++    assert note["invoice_id"] == second_invoice["id"]
++    assert note["amount"] == second_payment["amount"]
++    assert world.gateway.refunds == [(second_payment["gateway_ref"], second_payment["amount"])]
++    assert second_payment["status"] == "refunded"
++    assert first_payment["status"] == "succeeded"

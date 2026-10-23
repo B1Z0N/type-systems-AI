@@ -1,0 +1,300 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 13,
+  "duration_ms": 87258,
+  "api_duration_ms": 84880,
+  "cost_usd": 0.01889114,
+  "input_tokens": 26,
+  "output_tokens": 17716,
+  "cache_read_tokens": 318074,
+  "cache_write_tokens": 34249,
+  "models": [
+    "claude-haiku-5-5"
+  ],
+  "total_input_tokens": 352349,
+  "tool_calls": 12,
+  "tool_calls_by_kind": {
+    "read": 4,
+    "test": 3,
+    "edit": 4,
+    "answer": 1
+  },
+  "reads": 4,
+  "searches": 0,
+  "edits": 4,
+  "test_runs": 4,
+  "typecheck_runs": 1,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "engine.py",
+    "gateway.py",
+    "ledger.py",
+    "payments.py",
+    "refunds.py",
+    "serialization.py"
+  ],
+  "files_edited": [
+    "refunds.py"
+  ],
+  "unique_files_edited": 1,
+  "unique_files_read": 7,
+  "rereads": 5,
+  "read_chars": 17745,
+  "search_chars": 0,
+  "tool_output_chars": 30081,
+  "relevant_files_read": 5,
+  "exploration_precision": 0.7142857142857143,
+  "exploration_recall": 0.8333333333333334,
+  "steps_before_first_edit": 5,
+  "final_message": "Partial refunds are in. `refund_invoice`, `BillingEngine.refund`, and `POST /invoices/{id}/refund` now accept an optional `amount` in minor units. The suite passes (30 tests: the 24 existing plus 6 new).\n\n**What changed**\n- **`billing/refunds.py`**: `refund_invoice` takes `amount=None`.\n  - With an amount, it refunds that much from the successful payments, oldest first. A payment that is partly refunded becomes `partially_refunded`, and one that is fully refunded becomes `refunded`.\n  - Each call creates one credit note with `refunded=True` and the refunded amount.\n  - Without an amount, it refunds whatever is still refundable and returns applied account credit, as before. After partial refunds it refunds only the remainder.\n- **`billing/engine.py`**: `refund` passes `amount` through.\n- **`billing/api.py`**: the route reads an optional integer `amount` and returns 400 if it is not an integer.\n- **`tests/test_partial_refunds.py`** (new): covers partial then remainder, validation, the remainder-only full refund, oldest-first ordering across two payments, returning credit once, and the API.\n- **`answer.json`** is written in the repo root. It is gitignored, so it won't show in `git status`.\n\n**Choices I made where the spec was open**\n- **Ordering of checks:** `amount <= 0` raises `ValidationError` first. Then \"nothing left to refund\" raises `InvalidStateError`. Only after that does an amount above the remaining refundable raise `ValidationError`. So a positive amount on an exhausted invoice gets `InvalidStateError`, not `ValidationError`.\n- **Message for a second full refund:** it still reads \"invoice has already been refunded or credited\". Only the exception type is guaranteed to match today's behaviour.\n- **Credit tracking:** the old `credited_total > 0` guard would have blocked the second partial refund. I replaced it with a check for any non-refund credit note (from `credit_invoice`), which still blocks refunds after a credit. Whether applied credit has already been returned is read from the ledger, so the invoice's `credit_applied` field is unchanged.\n\n**Not addressed:** if the gateway refuses the second payment in a multi-payment refund, the first payment's refund stays recorded and no credit note is created. The old code had the same gap, and I left it alone.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/refunds.py"
+      ],
+      "read_paths": [
+        "billing/refunds.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && cat billing/refunds.py 2>/dev/null; find . -name \"*.py\" -not -path \"./.venv/*\" | head -50",
+      "output_chars": 5048,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/payments.py",
+        "billing/gateway.py"
+      ],
+      "read_paths": [
+        "billing/payments.py",
+        "billing/gateway.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "cat billing/payments.py billing/gateway.py; grep -n \"refund\" -i billing/engine.py billing/api.py billing/serialization.py billing/models.py billing/store.py billing/webhooks.py billing/reports.py billing/__init__.py; grep -rn \"refund\" tests | head -40",
+      "output_chars": 5840,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [
+        "billing/api.py",
+        "billing/engine.py",
+        "tests/test_credit_notes.py",
+        "tests/conftest.py",
+        "billing/serialization.py"
+      ],
+      "read_paths": [
+        "billing/api.py",
+        "billing/engine.py",
+        "tests/test_credit_notes.py",
+        "tests/conftest.py",
+        "billing/serialization.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "test"
+      ],
+      "command": "sed -n 1,140p billing/api.py | grep -n \"_optional\\|def \\|import\" ; grep -n \"_optional_int\\|def _optional\" -A8 billing/api.py | head -60; sed -n 120,140p billing/engine.py; cat tests/test_credit_notes.py; cat tests/conftest.py | head -60; grep -n \"partially\\|refund\" billing/store.py billing/webhooks.py billing/serialization.py; sed -n 60,90p billing/serialization.py; grep -n \"class ValidationError\\|class InvalidStateError\" -A3 billing/errors.py; cat .gitignore; .venv/bin/python -m pytest -q 2>&1 | tail -3",
+      "output_chars": 6210,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/ledger.py",
+        "billing/api.py",
+        "billing/api.py"
+      ],
+      "read_paths": [
+        "billing/ledger.py",
+        "billing/api.py",
+        "billing/api.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "cat billing/ledger.py; sed -n 17,40p billing/api.py; sed -n 95,101p billing/api.py; grep -n \"def payments_for_invoice\\|def credit_notes_for\" -A6 billing/store.py; grep -n \"credit_applied\" -B3 -A3 billing/invoices.py | head -60; grep -n \"class Payment\\b\\|class Payment(\" -A14 billing/models.py; grep -n \"refund\\|credit\" README.md",
+      "output_chars": 4920,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/engine.py"
+      ],
+      "read_paths": [
+        "billing/engine.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "grep -rn \"restore_credit\\|\\\"refund\\\"\" billing | grep -v \"def \"; sed -n 1,12p billing/engine.py; grep -n \"ledger\" billing/store.py | head; grep -n \"def subscribe\" -A12 billing/engine.py; grep -n \"Cents\" billing/models.py | head -3; grep -n \"refund\\|credit\" tests/test_lifecycle.py tests/test_webhooks_reports_api.py | head",
+      "output_chars": 1937,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Edit",
+      "paths": [
+        "billing/refunds.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit"
+      ],
+      "command": null,
+      "output_chars": 145,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "CreditNote",
+        "CreditNote",
+        "int"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run",
+        "search"
+      ],
+      "command": ".venv/bin/python - <<'EOF'\nimport re\ndef edit(path, old, new):\n    s = open(path).read()\n    assert s.count(old) == 1, (path, old[:40])\n    open(path, \"w\").write(s.replace(old, new))\n\nedit(\"billing/refunds.py\",\n     \"from .models import Cents, CreditNote, InvoiceId\\n\",\n     \"from .models import Cents, CreditNote, InvoiceId, Payment\\n\")\nedit(\"billing/engine.py\",\n     '''    def refund(self, invoice_id: InvoiceId, reason: str = \"requested_by_customer\") -> CreditNote:\n        return refunds.refund_invoice(self.ctx, invoice_id, reason)''',\n     '''    def refund(self, invoice_id: InvoiceId, reason: str = \"requested_by_customer\", amount: Cents | None = None) -> CreditNote:\n        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)''')\nedit(\"billing/api.py\",\n     '''def _items(body: JSONObject)''',\n     '''def _optional_int(body: JSONObject, key: str) -> int | None:\n    value = body.get(key)\n    if value is None:\n        return None\n    if isinstance(value, bool) or not isinstance(value, int):\n        raise ValidationError(f\"{key} must be an integer\")\n    return value\n\n\ndef _items(body: JSONObject)''')\nedit(\"billing/api.py\",\n     '''    note = engine.refund(InvoiceId(params[0]), _optional_str(body, \"reason\") or \"requested_by_customer\")''',\n     '''    amount = _optional_int(body, \"amount\")\n    note = engine.refund(\n        InvoiceId(params[0]), _optional_str(body, \"reason\") or \"requested_by_customer\", Cents(amount) if amount is not None else None\n    )''')\nEOF\ngrep -n \"^from .models import\" -A12 billing/engine.py | grep -n \"Cents\\|)\" | head -3; grep -n \"from .models import\" billing/api.py",
+      "output_chars": 118,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [
+        "billing/engine.py"
+      ],
+      "read_paths": [
+        "billing/engine.py"
+      ],
+      "kinds": [
+        "other",
+        "read",
+        "run",
+        "search",
+        "test",
+        "typecheck",
+        "vcs"
+      ],
+      "command": ".venv/bin/python - <<'EOF'\ndef edit(path, old, new):\n    s = open(path).read()\n    assert s.count(old) == 1, (path, old[:40])\n    open(path, \"w\").write(s.replace(old, new))\nedit(\"billing/api.py\",\n     \"from .models import CurrencyCode, CustomerId, EpochMillis, InvoiceId, JSONObject, JSONValue, PriceId, SubscriptionId\\n\",\n     \"from .models import Cents, CurrencyCode, CustomerId, EpochMillis, InvoiceId, JSONObject, JSONValue, PriceId, SubscriptionId\\n\")\nEOF\nsed -n 1,20p billing/engine.py | grep -n \"Cents\\|Clock\\|DunningPolicy\"; sed -n 9,20p billing/engine.py; .venv/bin/python -m pytest -q 2>&1 | tail -3; .venv/bin/python -m mypy billing 2>/dev/null | tail -3; git diff --stat",
+      "output_chars": 527,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "billing/refunds.py",
+        "CreditNote",
+        "CreditNote"
+      ],
+      "read_paths": [
+        "billing/refunds.py"
+      ],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run"
+      ],
+      "command": ".venv/bin/python - <<'EOF'\ndef edit(path, old, new):\n    s = open(path).read()\n    assert s.count(old) == 1, (path, old[:40])\n    open(path, \"w\").write(s.replace(old, new))\nedit(\"billing/engine.py\", \"from .models import (\\n    Clock,\\n    CouponId,\", \"from .models import (\\n    Cents,\\n    Clock,\\n    CouponId,\")\nedit(\"billing/engine.py\", \"    def refund(self, invoice_id: InvoiceId, reason: str = \\\"requested_by_customer\\\", amount: Cents | None = None) -> CreditNote:\\n        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)\",\n\"    def refund(\\n        self, invoice_id: InvoiceId, reason: str = \\\"requested_by_customer\\\", amount: Cents | None = None\\n    ) -> CreditNote:\\n        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)\")\nedit(\"billing/api.py\", \"    note = engine.refund(\\n        InvoiceId(params[0]), _optional_str(body, \\\"reason\\\") or \\\"requested_by_customer\\\", Cents(amount) if amount is not None else None\\n    )\",\n\"    note = engine.refund(\\n        InvoiceId(params[0]),\\n        _optional_str(body, \\\"reason\\\") or \\\"requested_by_customer\\\",\\n        Cents(amount) if amount is not None else None,\\n    )\")\nEOF\nsed -n 95,110p billing/api.py; cat billing/refunds.py | sed -n 40,100p",
+      "output_chars": 3959,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "tests/test_partial_refunds.py",
+        "tests/test_partial_refunds.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read"
+      ],
+      "command": "cat > tests/test_partial_refunds.py <<'EOF'\nimport pytest\n\nfrom billing import ledger\nfrom billing.errors import InvalidStateError, ValidationError\nfrom billing.models import Cents\n\n\ndef _paid_invoice(world, cus):\n    world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)])\n    [inv] = world.engine.invoices_for(cus[\"id\"])\n    return inv\n\n\ndef _add_payment(world, cus, inv, amount):\n    \"\"\"Record a second successful payment on the invoice, as a later charge would.\"\"\"\n    method = world.ctx.store.payment_methods_for(cus[\"id\"])[0] if hasattr(world.ctx.store, \"payment_methods_for\") else None\n    ref = world.gateway.charge(method, Cents(amount), \"usd\", f\"extra:{amount}\")[\"gateway_ref\"]\n    world.ctx.store.payments[f\"extra_{amount}\"] = {\n        \"id\": f\"extra_{amount}\",\n        \"invoice_id\": inv[\"id\"],\n        \"customer_id\": cus[\"id\"],\n        \"method_id\": method[\"id\"],\n        \"amount\": Cents(amount),\n        \"currency\": \"usd\",\n        \"status\": \"succeeded\",\n        \"refunded_amount\": Cents(0),\n        \"gateway_ref\": ref,\n        \"failure_code\": None,\n        \"created_at\": world.clock.now() + 1,\n    }\n\n\ndef test_partial_then_remainder(world):\n    cus = world.customer()\n    inv = _paid_invoice(world, cus)\n    [payment] = world.ctx.store.payments_for_invoice(inv[\"id\"])\n\n    first = world.engine.refund(inv[\"id\"], amount=300)\n    assert first[\"amount\"] == 300 and first[\"refunded\"] is True\n    assert payment[\"status\"] == \"partially_refunded\"\n    assert payment[\"refunded_amount\"] == 300\n\n    second = world.engine.refund(inv[\"id\"], amount=700)\n    assert second[\"amount\"] == 700\n    assert payment[\"status\"] == \"refunded\"\n    assert payment[\"refunded_amount\"] == 1000\n\n    with pytest.raises(InvalidStateError):\n        world.engine.refund(inv[\"id\"], amount=1)\n    with pytest.raises(InvalidStateError):\n        world.engine.refund(inv[\"id\"])\n\n\ndef test_amount_must_be_positive_and_within_remaining(world):\n    cus = world.customer()\n    inv = _paid_invoice(world, cus)\n    for bad in (0, -5):\n        with pytest.raises(ValidationError):\n            world.engine.refund(inv[\"id\"], amount=bad)\n    with pytest.raises(ValidationError):\n        world.engine.refund(inv[\"id\"], amount=1001)\n    world.engine.refund(inv[\"id\"], amount=600)\n    with pytest.raises(ValidationError):\n        world.engine.refund(inv[\"id\"], amount=401)\n    assert world.gateway.refunds == [(\"ch_000001\", 600)]\n\n\ndef test_full_refund_after_partial_refunds_only_refunds_remainder(world):\n    cus = world.customer()\n    inv = _paid_invoice(world, cus)\n    world.engine.refund(inv[\"id\"], amount=300)\n    note = world.engine.refund(inv[\"id\"])\n    assert note[\"amount\"] == 700\n    assert [amount for _, amount in world.gateway.refunds] == [300, 700]\n\n\ndef test_refunds_take_oldest_payment_first(world):\n    cus = world.customer()\n    inv = _paid_invoice(world, cus)\n    _add_payment(world, cus, inv, 500)\n    first, second = world.ctx.store.payments_for_invoice(inv[\"id\"])[0], world.ctx.store.payments[\"extra_500\"]\n\n    world.engine.refund(inv[\"id\"], amount=1200)\n\n    assert first[\"status\"] == \"refunded\" and first[\"refunded_amount\"] == 1000\n    assert second[\"status\"] == \"partially_refunded\" and second[\"refunded_amount\"] == 200\n\n\ndef test_full_refund_returns_applied_credit_once(world):\n    cus = world.customer()\n    ledger.grant_credit(world.ctx, cus[\"id\"], 300)\n    world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)])\n    [inv] = world.engine.invoices_for(cus[\"id\"])\n    assert inv[\"credit_applied\"] == 300\n\n    note = world.engine.refund(inv[\"id\"])\n\n    assert note[\"amount\"] == 1000\n    assert ledger.balance(world.ctx, cus[\"id\"]) == 300\n    with pytest.raises(InvalidStateError):\n        world.engine.refund(inv[\"id\"])\nEOF\n.venv/bin/python -m pytest -q 2>&1 | tail -30",
+      "output_chars": 98,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "run",
+        "test"
+      ],
+      "command": ".venv/bin/python - <<'EOF'\ndef edit(path, old, new):\n    s = open(path).read()\n    assert s.count(old) == 1, (path, old[:40])\n    open(path, \"w\").write(s.replace(old, new))\np = \"tests/test_partial_refunds.py\"\nedit(p, \"from billing import ledger\\n\", \"from billing import customers, ledger\\n\")\nedit(p, \"from billing.models import Cents\\n\", \"from billing.api import handle\\nfrom billing.models import Cents\\n\")\nedit(p, '    method = world.ctx.store.payment_methods_for(cus[\"id\"])[0] if hasattr(world.ctx.store, \"payment_methods_for\") else None\\n',\n        '    method = customers.default_payment_method(world.ctx, cus[\"id\"])\\n')\ns = open(p).read()\ns += '''\n\ndef test_api_accepts_amount(world):\n    cus = world.customer()\n    inv = _paid_invoice(world, cus)\n    status, body = handle(world.engine, \"POST\", f\"/invoices/{inv['id']}/refund\", {\"amount\": 250})\n    assert status == 200 and body[\"amount\"] == 250\n    status, _ = handle(world.engine, \"POST\", f\"/invoices/{inv['id']}/refund\", {\"amount\": \"250\"})\n    assert status == 400 or status >= 400\n'''\nopen(p, \"w\").write(s)\nEOF\ngrep -n \"def handle\" -A12 billing/api.py | head -30; .venv/bin/python -m pytest -q 2>&1 | tail -30",
+      "output_chars": 758,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Bash",
+      "paths": [
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "run",
+        "test",
+        "vcs"
+      ],
+      "command": ".venv/bin/python - <<'EOF'\np = \"tests/test_partial_refunds.py\"\ns = open(p).read()\nold = '    assert status == 400 or status >= 400\\n'\nassert s.count(old) == 1\nopen(p, \"w\").write(s.replace(old, '    assert status == 400\\n'))\nEOF\nprintf '%s\\n' '{\"summary\": \"Added optional minor-unit `amount` to refunds (engine, Python API, and POST /invoices/{id}/refund) that refunds oldest successful payments first, tracks partially_refunded payments, creates one refunded credit note per refund, and keeps the no-amount full-refund behaviour including returning applied credit once.\"}' > answer.json\n.venv/bin/python -c \"import json;print(json.load(open('answer.json')))\"; .venv/bin/python -m pytest -q 2>&1 | tail -3; git status --short",
+      "output_chars": 521,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 88.2,
+  "timed_out": false,
+  "exit_code": 0,
+  "budget_exhausted": false,
+  "max_tool_calls": null
+}

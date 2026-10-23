@@ -1,0 +1,41 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index 49d9f4c..e2f9eeb 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -1,7 +1,7 @@
+ """Charging invoices through the payment gateway."""
+ 
+ from .customers import default_payment_method, is_expired
+-from .dunning import record_failure
++from .dunning import record_failure, recover
+ from .errors import InvalidStateError
+ from .invoices import mark_paid
+ 
+@@ -41,7 +41,7 @@ def collect(ctx, invoice_id):
+     ctx.store.payments[payment["id"]] = payment
+     if result["ok"]:
+         mark_paid(ctx, invoice, payment["amount"])
+-        pass
++        recover(ctx, invoice)
+     else:
+         record_failure(ctx, invoice, result["failure_code"] or "unknown")
+     return payment
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..8ee3ded 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,14 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_recovery_after_retry_succeeds(world):
++    cus = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    assert sub["status"] == "past_due"
++    world.advance_days(1)
++    assert sub["status"] == "active"
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"

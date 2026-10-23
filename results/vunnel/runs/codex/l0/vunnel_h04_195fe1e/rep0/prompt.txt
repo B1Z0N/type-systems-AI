@@ -1,0 +1,14 @@
+AlmaLinux OSV records produced by the `alma` provider carry no fix dates, unlike rocky's.
+Every range with a `fixed` event should get `database_specific.anchore.fixes` entries of the
+form `{"version": <fixed version>, "date": "YYYY-MM-DD", "kind": "advisory"}`, including for
+the library package clones the parser creates (for example `lua-libs` next to `lua`).
+
+- The date is the advisory's upstream `published` field (UTC date), so output is the same on
+  every run.
+- The record-level `database_specific.anchore` marker (`{"record_type": "advisory"}`) must
+  be kept as it is.
+- The parser accepts an optional fix date finder (like rocky's parser does), works as a
+  context manager, and downloads the fix date data once per run.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

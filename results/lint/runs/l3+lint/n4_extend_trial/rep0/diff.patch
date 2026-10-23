@@ -1,0 +1,60 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index e0ff3b2..6dd6a84 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -190,6 +190,25 @@ def reactivate(ctx: Context, subscription_id: SubscriptionId) -> Subscription:
+     return subscription
+ 
+ 
++def extend_trial(ctx: Context, subscription_id: SubscriptionId, days: int) -> Subscription:
++    """Push back the end of a trial (and the first billing date) by a whole number of days."""
++    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    trial_end = subscription["trial_end"]
++    if subscription["status"] != "trialing" or trial_end is None:
++        raise InvalidStateError("only trialing subscriptions can have their trial extended")
++    delta = days * SECONDS_PER_DAY
++    subscription["trial_end"] = EpochSeconds(trial_end + delta)
++    subscription["current_period_end"] = EpochSeconds(subscription["current_period_end"] + delta)
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def pause(ctx: Context, subscription_id: SubscriptionId) -> Subscription:
+     subscription = ctx.store.require_subscription(subscription_id)
+     transition(ctx, subscription, "paused")
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..641d9f0 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,25 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_extend_trial_delays_billing(world):
++    import pytest
++
++    from billing import subscriptions
++    from billing.errors import InvalidStateError, ValidationError
++
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    end = sub["trial_end"]
++    subscriptions.extend_trial(world.ctx, sub["id"], 7)
++    assert sub["trial_end"] == end + 7 * 86_400
++    assert sub["current_period_end"] == end + 7 * 86_400
++    for bad in (0, -1, 1.5, True):
++        with pytest.raises(ValidationError):
++            subscriptions.extend_trial(world.ctx, sub["id"], bad)
++    assert world.advance_days(14) == []
++    assert len(world.advance_days(7)) == 1
++    assert sub["status"] == "active"
++    with pytest.raises(InvalidStateError):
++        subscriptions.extend_trial(world.ctx, sub["id"], 1)

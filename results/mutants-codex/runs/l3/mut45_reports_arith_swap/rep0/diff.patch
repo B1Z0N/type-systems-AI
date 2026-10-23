@@ -1,0 +1,37 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index a76b093..a845803 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -54,7 +54,7 @@ def revenue_between(ctx: Context, start: EpochSeconds, end: EpochSeconds) -> dic
+         if paid_at is None or not start <= paid_at < end:
+             continue
+         credited = sum(note["amount"] for note in ctx.store.credit_notes_for(invoice["id"]))
+-        net = invoice["amount_paid"] + credited
++        net = invoice["amount_paid"] - credited
+         currency = invoice["currency"]
+         totals[currency] = Cents(totals.get(currency, Cents(0)) + net)
+     return totals
+diff --git a/tests/test_webhooks_reports_api.py b/tests/test_webhooks_reports_api.py
+index b4b87fb..108e546 100644
+--- a/tests/test_webhooks_reports_api.py
++++ b/tests/test_webhooks_reports_api.py
+@@ -1,6 +1,6 @@
+ import json
+ 
+-from billing import webhooks
++from billing import reports, webhooks
+ from billing.api import handle
+ 
+ 
+@@ -55,3 +55,11 @@ def test_api_round_trip(world):
+     status, err = handle(world.engine, "GET", "/invoices/in_999999")
+     assert status == 404
+     assert handle(world.engine, "POST", "/usage", {"subscription": sub["id"]})[0] == 400
++
++
++def test_revenue_between_nets_credit_notes(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    world.engine.refund(inv["id"])
++    assert reports.revenue_between(world.ctx, inv["paid_at"], inv["paid_at"] + 1) == {"usd": 0}

@@ -1,0 +1,41 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index 21f88df..ae0cd4b 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -36,7 +36,7 @@ def mrr(ctx):
+         if subscription["status"] not in ("active", "past_due"):
+             continue
+         currency = ctx.store.require_customer(subscription["customer_id"])["currency"]
+-        mrr_by_currency[currency] = mrr_by_currency.get(currency, 0) - monthly_amount(ctx, subscription)
++        mrr_by_currency[currency] = mrr_by_currency.get(currency, 0) + monthly_amount(ctx, subscription)
+     return mrr_by_currency
+ 
+ 
+diff --git a/tests/test_webhooks_reports_api.py b/tests/test_webhooks_reports_api.py
+index b4b87fb..94d2347 100644
+--- a/tests/test_webhooks_reports_api.py
++++ b/tests/test_webhooks_reports_api.py
+@@ -1,6 +1,6 @@
+ import json
+ 
+-from billing import webhooks
++from billing import catalog, reports, webhooks
+ from billing.api import handle
+ 
+ 
+@@ -55,3 +55,15 @@ def test_api_round_trip(world):
+     status, err = handle(world.engine, "GET", "/invoices/in_999999")
+     assert status == 404
+     assert handle(world.engine, "POST", "/usage", {"subscription": sub["id"]})[0] == 400
++
++
++def test_mrr_adds_monthly_and_annual_subscriptions(world):
++    annual = catalog.create_price(
++        world.ctx, world.team["id"], "usd", "per_unit", unit_amount=12000, interval="year"
++    )
++    monthly_customer = world.customer(email="monthly@example.com")
++    annual_customer = world.customer(email="annual@example.com")
++    world.engine.subscribe(monthly_customer["id"], [(world.team_monthly["id"], 1)])
++    world.engine.subscribe(annual_customer["id"], [(annual["id"], 1)])
++
++    assert reports.mrr(world.ctx) == {"usd": 4000}

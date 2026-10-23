@@ -1,0 +1,1 @@
+{"summary": "Added trial extensions that delay billing, validate inputs and subscription state, and emit an update event."}

@@ -1,0 +1,17 @@
+id: n4_extend_trial
+category: change
+stratum: type_neutral
+title: Extend a trial
+read_only: false
+relevant_files: [subscriptions.py, engine.py, events.py]
+prompt: |
+  Add `subscriptions.extend_trial(ctx, subscription_id, days)`. It extends a trialing
+  subscription's trial by `days` whole days: both `trial_end` and `current_period_end` move
+  later by that amount, and a `subscription.updated` event is emitted. Raise
+  `ValidationError` if `days` is not a positive integer and `InvalidStateError` if the
+  subscription is not trialing. When the extended trial ends, billing starts as usual.
+answer_schema: |
+  {"summary": "<one sentence>"}
+grader:
+  type: tests
+  task_tests: [tasks/test_n4_extend_trial.py]

@@ -1,0 +1,7 @@
+We're auditing for None-handling bugs. List every function or method in the `billing`
+package (including private helpers) that can return `None` to its caller as a normal
+result, not counting functions that never return a value at all.
+Name functions as `module.function` (methods as `module.Class.method`).
+
+Do not modify any files other than `answer.json`. When you are done, write your final answer as JSON to `answer.json` in the repository root, using exactly this shape:
+{"functions": ["<module.function>", ...]}

@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added partial invoice refunds with oldest-payment allocation, payment status updates, credit notes, validation, and API support."
+  },
+  "answer_error": null
+}

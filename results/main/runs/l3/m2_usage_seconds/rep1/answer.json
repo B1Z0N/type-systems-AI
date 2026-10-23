@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds (plus a 0-999 ms remainder so the API/engine still accept and return exact milliseconds and ordering is unchanged); billing results are unchanged."}

@@ -1,0 +1,14 @@
+When a provider plugin registers a name that already exists as a different built-in provider
+class, registration always fails. Make the behavior configurable.
+
+- Add an enum `PluginOverrideMode` in `vunnel.providers` with members `FAIL`, `REPLACE` and
+  `IGNORE`, and a classmethod `PluginOverrideMode.from_env()` that reads the
+  `VUNNEL_PLUGIN_OVERRIDE_MODE` environment variable case-insensitively ("fail", "replace",
+  "ignore"). Unset, empty or unknown values mean `FAIL`.
+- `register(name, cls, mode=None)`: on a collision with a different class, `FAIL` raises
+  `KeyError` (the existing behavior), `REPLACE` makes the new class win and `IGNORE` keeps
+  the existing one. Names that don't collide register normally in every mode. With no
+  explicit `mode`, `register()` resolves it from the environment at call time.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

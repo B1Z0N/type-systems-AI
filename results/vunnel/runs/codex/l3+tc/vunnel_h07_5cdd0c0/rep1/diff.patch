@@ -1,0 +1,61 @@
+diff --git a/src/vunnel/providers/wolfi/parser.py b/src/vunnel/providers/wolfi/parser.py
+index 40d3d68..ce86e94 100644
+--- a/src/vunnel/providers/wolfi/parser.py
++++ b/src/vunnel/providers/wolfi/parser.py
+@@ -69,9 +69,10 @@ class Parser(abc.ABC):
+         return os.path.basename(urlparse(url).path)
+ 
+     def build_reference_links(self, vulnerability_id: str) -> list[str]:
+-        urls = []
+-        urls.append(f"{self.security_reference_url}/{vulnerability_id}")
+-        urls.extend(vulnerability.build_reference_links(vulnerability_id))
++        urls = [f"{self.security_reference_url}/{vulnerability_id}"]
++        additional_links = vulnerability.build_reference_links(vulnerability_id)
++        if additional_links:
++            urls.extend(additional_links)
+         return urls
+ 
+     @abc.abstractmethod
+diff --git a/tests/unit/providers/wolfi/test_wolfi.py b/tests/unit/providers/wolfi/test_wolfi.py
+index e88bf5c..1046198 100644
+--- a/tests/unit/providers/wolfi/test_wolfi.py
++++ b/tests/unit/providers/wolfi/test_wolfi.py
+@@ -21,6 +21,38 @@ OSV_SCHEMA_PATH = (
+ )
+ 
+ 
++@pytest.mark.parametrize("namespace", ["wolfi", "chainguard"])
++@pytest.mark.parametrize(
++    ("vulnerability_id", "expected_links"),
++    [
++        ("GO-2026-5932", ["https://images.chainguard.dev/security/GO-2026-5932"]),
++        (
++            "CVE-2022-30065",
++            [
++                "https://images.chainguard.dev/security/CVE-2022-30065",
++                "https://www.cve.org/CVERecord?id=CVE-2022-30065",
++                "https://nvd.nist.gov/vuln/detail/CVE-2022-30065",
++            ],
++        ),
++    ],
++)
++def test_secdb_reference_links_and_normalization(
++    tmpdir, auto_fake_fixdate_finder, namespace, vulnerability_id, expected_links
++):
++    p = SecDBParser(
++        workspace=workspace.Workspace(tmpdir, "test", create=True),
++        url="https://packages.wolfi.dev/os/security.json",
++        namespace=namespace,
++    )
++
++    assert p.build_reference_links(vulnerability_id) == expected_links
++
++    data = {"packages": [{"pkg": {"name": "example", "secfixes": {"1.0-r1": [vulnerability_id]}}}]}
++    record = p._normalize("rolling", data)[vulnerability_id]["Vulnerability"]
++    assert record["Name"] == vulnerability_id
++    assert record["Link"] == expected_links[0]
++
++
+ class TestParser:
+     @pytest.fixture()
+     def mock_raw_data(self, helpers):

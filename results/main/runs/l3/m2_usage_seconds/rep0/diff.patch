@@ -1,0 +1,81 @@
+diff --git a/billing/api.py b/billing/api.py
+index 8f1f9db..6f2bc24 100644
+--- a/billing/api.py
++++ b/billing/api.py
+@@ -6,6 +6,7 @@ from typing import Final
+ from . import customers, invoices
+ from .engine import BillingEngine
+ from .errors import BillingError, NotFoundError, ValidationError
++from .clock import to_millis
+ from .models import CurrencyCode, CustomerId, EpochMillis, InvoiceId, JSONObject, JSONValue, PriceId, SubscriptionId
+ from .render import render_invoice
+ from .serialization import customer_json, invoice_json, subscription_json
+@@ -81,7 +82,7 @@ def report_usage(engine: BillingEngine, _: list[str], body: JSONObject) -> Respo
+         timestamp,
+         _optional_str(body, "idempotency_key"),
+     )
+-    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp"]}
++    return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": to_millis(record["timestamp"]) + record["timestamp_subsec_ms"]}
+ 
+ 
+ def get_invoice(engine: BillingEngine, params: list[str], _: JSONObject) -> Response:
+diff --git a/billing/models.py b/billing/models.py
+index 535d9c4..9196e86 100644
+--- a/billing/models.py
++++ b/billing/models.py
+@@ -187,7 +187,8 @@ class UsageRecord(TypedDict):
+     subscription_id: SubscriptionId
+     price_id: PriceId
+     quantity: int
+-    timestamp: EpochMillis
++    timestamp: EpochSeconds
++    timestamp_subsec_ms: int  # millisecond remainder of the reported timestamp, 0-999
+     idempotency_key: str | None
+ 
+ 
+diff --git a/billing/usage.py b/billing/usage.py
+index a6900fa..be93d46 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,6 +1,6 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_seconds
+ from .context import Context
+ from .errors import ValidationError
+ from .models import EpochMillis, EpochSeconds, PriceId, SubscriptionId, UsageRecord
+@@ -26,12 +26,17 @@ def report_usage(
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    if timestamp is None:
++        seconds, subsec_ms = ctx.clock.now(), 0
++    else:
++        seconds, subsec_ms = to_seconds(timestamp), timestamp % 1000
+     record: UsageRecord = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": seconds,
++        "timestamp_subsec_ms": subsec_ms,
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+@@ -47,12 +52,10 @@ def records_in_period(
+     period_start: EpochSeconds,
+     period_end: EpochSeconds,
+ ) -> list[UsageRecord]:
+-    start = to_millis(period_start)
+-    end = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record for record in ctx.store.usage_for(subscription_id, price_id) if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp"], record["timestamp_subsec_ms"], record["id"]))
+ 
+ 
+ def aggregate_usage(

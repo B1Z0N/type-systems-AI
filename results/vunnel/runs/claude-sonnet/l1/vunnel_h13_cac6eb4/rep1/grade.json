@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added PluginOverrideMode (FAIL/REPLACE/IGNORE, from VUNNEL_PLUGIN_OVERRIDE_MODE) and an optional mode argument to register()."
+  },
+  "answer_error": null
+}

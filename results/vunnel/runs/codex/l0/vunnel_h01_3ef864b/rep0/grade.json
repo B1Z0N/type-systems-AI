@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 10,
+  "target_total": 10,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Made Chainguard Libraries OpenVEX version markers configurable with per-ecosystem defaults, merging, disabling, and validation."
+  },
+  "answer_error": null
+}

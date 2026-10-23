@@ -1,0 +1,77 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index e56d88d..a0b37b2 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,22 +1,31 @@
+ """Metered usage reporting and aggregation.
+ 
+-Usage record timestamps are epoch milliseconds, while billing periods are epoch seconds.
++Usage records store `timestamp` in epoch seconds (like billing periods), plus the
++sub-second remainder in `timestamp_ms_offset` (0-999) so the client-facing millisecond
++value is preserved exactly. `report_usage` accepts and returns milliseconds.
+ """
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .errors import ValidationError
+ 
+ 
++def client_view(record):
++    """Copy of a stored usage record with `timestamp` in epoch milliseconds."""
++    view = {key: value for key, value in record.items() if key != "timestamp_ms_offset"}
++    view["timestamp"] = to_millis(record["timestamp"]) + record["timestamp_ms_offset"]
++    return view
++
++
+ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idempotency_key=None):
+     """Record `quantity` units of metered usage and return the usage record.
+ 
+-    `timestamp` is epoch milliseconds and defaults to now. When `idempotency_key` was
++    `timestamp` is epoch milliseconds (stored as seconds) and defaults to now. When `idempotency_key` was
+     seen before, the original record is returned unchanged and nothing is validated.
+     Raises ValidationError if the subscription is canceled or paused, the price is not
+     metered or not on the subscription, or the quantity is negative.
+     """
+     if idempotency_key is not None and idempotency_key in ctx.store.usage_keys:
+-        return ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]]
++        return client_view(ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]])
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] in ("canceled", "paused"):
+         raise ValidationError(f"cannot report usage on a {subscription['status']} subscription")
+@@ -27,28 +36,30 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    timestamp_ms = timestamp if timestamp is not None else to_millis(ctx.clock.now())
+     record = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": to_seconds(timestamp_ms),
++        "timestamp_ms_offset": timestamp_ms - to_millis(to_seconds(timestamp_ms)),
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+     if idempotency_key is not None:
+         ctx.store.usage_keys[idempotency_key] = record["id"]
+-    return record
++    return client_view(record)
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     """Usage records within [period_start, period_end) (epoch seconds), oldest first."""
+-    start_ms = to_millis(period_start)
+-    end_ms = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start_ms <= record["timestamp"] < end_ms
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp"], record["timestamp_ms_offset"], record["id"]))
+ 
+ 
+ def aggregate_usage(ctx, subscription_id, price_id, period_start, period_end):

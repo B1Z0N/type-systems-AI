@@ -1,0 +1,43 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index 330bf40..38c0bfa 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -40,7 +40,7 @@ def refund_invoice(ctx: Context, invoice_id: InvoiceId, reason: str = "requested
+         raise InvalidStateError("only paid invoices can be refunded")
+     if credited_total(ctx, invoice_id) > 0:
+         raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(ctx, invoice["customer_id"])
++    payments = successful_payments(ctx, invoice_id)
+     refunded = Cents(0)
+     for payment in payments:
+         remaining = Cents(payment["amount"] - payment["refunded_amount"])
+diff --git a/tests/test_credit_notes.py b/tests/test_credit_notes.py
+index 26befa7..783f87b 100644
+--- a/tests/test_credit_notes.py
++++ b/tests/test_credit_notes.py
+@@ -1,6 +1,6 @@
+ import pytest
+ 
+-from billing import ledger, refunds
++from billing import ledger, payments, refunds
+ 
+ 
+ def test_credit_note_limits(world):
+@@ -11,3 +11,17 @@ def test_credit_note_limits(world):
+     assert ledger.balance(world.ctx, cus["id"]) == 400
+     with pytest.raises(Exception):
+         refunds.credit_invoice(world.ctx, inv["id"], 700, "too much")
++
++
++def test_refund_paid_invoice_returns_charged_amount(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    if inv["status"] != "paid":
++        payments.collect(world.ctx, inv["id"])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"
++    note = refunds.refund_invoice(world.ctx, inv["id"])
++    assert note["amount"] == inv["total"]
++    assert note["refunded"] is True
++    assert all(p["status"] == "refunded" for p in world.ctx.store.payments_for_invoice(inv["id"]))

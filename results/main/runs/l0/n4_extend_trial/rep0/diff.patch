@@ -1,0 +1,60 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index 9183b27..1a8724a 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -135,6 +135,23 @@ def change_items(ctx, subscription_id, items, *, prorate=True):
+     return subscription
+ 
+ 
++def extend_trial(ctx, subscription_id, days):
++    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    if subscription["status"] != "trialing":
++        raise InvalidStateError("only trialing subscriptions can have their trial extended")
++    delta = days * SECONDS_PER_DAY
++    subscription["trial_end"] += delta
++    subscription["current_period_end"] += delta
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def cancel(ctx, subscription_id, *, at_period_end=True):
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] == "canceled":
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..d44ebbc 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,27 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_extend_trial_delays_billing(world):
++    import pytest
++
++    from billing import subscriptions
++    from billing.errors import InvalidStateError, ValidationError
++
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    end = sub["trial_end"]
++    subscriptions.extend_trial(world.ctx, sub["id"], 7)
++    assert sub["trial_end"] == end + 7 * 86_400
++    assert sub["current_period_end"] == end + 7 * 86_400
++    for bad in (0, -1, 1.5, True):
++        with pytest.raises(ValidationError):
++            subscriptions.extend_trial(world.ctx, sub["id"], bad)
++    world.advance_days(14)
++    assert sub["status"] == "trialing"
++    world.advance_days(7)
++    assert sub["status"] == "active"
++    assert len(world.engine.invoices_for(cus["id"])) == 1
++    with pytest.raises(InvalidStateError):
++        subscriptions.extend_trial(world.ctx, sub["id"], 1)

@@ -1,0 +1,54 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 3ef0d16..704adec 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -51,7 +51,7 @@ def due_for_retry(ctx: Context, now: EpochSeconds) -> list[InvoiceId]:
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "open" or invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
++        if invoice["status"] == "open" and invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
+     ]
+     return [invoice["id"] for invoice in sorted(due, key=lambda inv: (inv["next_attempt_at"] or 0, inv["id"]))]
+ 
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..2bcdade 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,6 @@
+ from billing import ledger
+ from billing.clock import format_date
++from billing.models import SECONDS_PER_DAY
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -55,3 +56,29 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_declined_card_retries_only_on_dunning_schedule(world):
++    cus = world.customer(last4="0002")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(cus["id"])
++    first_attempt_at = world.clock.now()
++
++    assert invoice["attempt_count"] == 1
++    assert invoice["next_attempt_at"] == first_attempt_at + SECONDS_PER_DAY
++    assert sub["status"] == "past_due"
++
++    for day in range(8):
++        world.engine.run_cycle()
++        assert invoice["attempt_count"] == 1 + sum(retry_day <= day for retry_day in (1, 3, 7))
++        if day < 7:
++            assert sub["status"] == "past_due"
++        else:
++            assert sub["status"] == "unpaid"
++            assert invoice["next_attempt_at"] is None
++        if day < 7:
++            world.clock.advance_days(1)
++
++    world.engine.run_cycle()
++    assert invoice["attempt_count"] == 4
++    assert len(world.gateway.charges) == 4

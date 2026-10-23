@@ -1,0 +1,6 @@
+The MRR report (`reports.mrr`) returns negative numbers. For example, with one customer paying
+30.00 USD per month and another paying 120.00 USD per year, it reports -40.00 USD instead of
+40.00 USD. Find the root cause and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

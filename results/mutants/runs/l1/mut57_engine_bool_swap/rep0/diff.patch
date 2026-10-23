@@ -1,0 +1,13 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index acff999..6f4272b 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -11,7 +11,7 @@ class BillingEngine:
+         self, clock, gateway, transport, dunning_policy: dict | None = None, fx: RateTable | None = None
+     ) -> None:
+         self.clock = clock
+-        self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
++        self.ctx = Context(clock, gateway, transport, dunning_policy or DEFAULT_POLICY, fx)
+ 
+     def subscribe(
+         self, customer_id: str, items: list, *, trial_days: int | None = None, coupon_id: str | None = None

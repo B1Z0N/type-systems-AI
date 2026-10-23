@@ -1,0 +1,1 @@
+{"summary": "Fixed Wolfi and Chainguard secdb parsing for non-CVE vulnerability IDs while preserving existing CVE reference links."}

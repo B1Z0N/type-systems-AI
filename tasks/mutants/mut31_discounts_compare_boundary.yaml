@@ -1,0 +1,61 @@
+id: mut31_discounts_compare_boundary
+category: bugfix
+stratum: type_neutral
+origin: mutant
+title: Random compare boundary mutant in discounts.py
+read_only: false
+bug_kind: compare_boundary
+checker_catches_at: none
+relevant_files:
+- discounts.py
+mutations:
+- file: discounts.py
+  find: |2
+        if coupon["max_redemptions"] is not None and coupon["times_redeemed"] >= coupon["max_redemptions"]:
+  replace: |2
+        if coupon["max_redemptions"] is not None and coupon["times_redeemed"] > coupon["max_redemptions"]:
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+  from billing import discounts
+
+
+  def test_exhausted_coupon_rejected_before_subscription_exists(world):
+      import pytest
+
+      from billing.errors import InvalidStateError
+
+      cus = world.customer()
+      coupon = discounts.create_coupon(world.ctx, "one", percent_off=1000, max_redemptions=1)
+      world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], coupon_id=coupon["id"])
+      before = len(world.ctx.store.subscriptions)
+      with pytest.raises(InvalidStateError):
+          world.engine.subscribe(cus["id"], [(world.team_monthly["id"], 1)], coupon_id=coupon["id"])
+      assert len(world.ctx.store.subscriptions) == before
+  ```
+
+  It fails with:
+
+  ```
+  Failed: DID NOT RAISE InvalidStateError
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: discounts.py
+  function: is_redeemable
+grader:
+  type: tests
+  target_tests:
+  - base/test_discounts_tax.py::test_exhausted_coupon_rejected_before_subscription_exists
+mutant:
+  site: discounts.py:70
+  operator: compare_boundary
+  index: 5
+  hidden_failing: 1
+  mypy_errors_l3: 0
+  mypy_errors_l2: 0

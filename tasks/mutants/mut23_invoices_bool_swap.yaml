@@ -1,0 +1,59 @@
+id: mut23_invoices_bool_swap
+category: bugfix
+stratum: type_relevant
+origin: mutant
+title: Random bool swap mutant in invoices.py
+read_only: false
+bug_kind: bool_swap
+checker_catches_at: l2
+relevant_files:
+- invoices.py
+mutations:
+- file: invoices.py
+  find: |2
+        if coupon is None or not applies_this_period(coupon, subscription["coupon_periods_used"]):
+  replace: |2
+        if coupon is None and not applies_this_period(coupon, subscription["coupon_periods_used"]):
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+  from billing import discounts
+
+
+  def test_percent_coupon_once(world):
+      cus = world.customer()
+      coupon = discounts.create_coupon(world.ctx, "20OFF", percent_off=2000)
+      world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], coupon_id=coupon["id"])
+      world.advance_days(31)
+      first, second = world.engine.invoices_for(cus["id"])
+      assert first["discount_total"] == 200
+      assert first["total"] == 800
+      assert second["discount_total"] == 0
+  ```
+
+  It fails with:
+
+  ```
+  assert 200 == 0
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: invoices.py
+  function: apply_discounts
+grader:
+  type: tests
+  target_tests:
+  - base/test_discounts_tax.py::test_percent_coupon_once
+  - base/test_discounts_tax.py::test_repeating_coupon
+mutant:
+  site: invoices.py:156
+  operator: bool_swap
+  index: 1
+  hidden_failing: 2
+  mypy_errors_l3: 2
+  mypy_errors_l2: 2

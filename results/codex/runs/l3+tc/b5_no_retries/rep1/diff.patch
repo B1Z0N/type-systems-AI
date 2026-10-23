@@ -1,0 +1,55 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index a7a2c70..c9ba953 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -51,7 +51,7 @@ def due_for_retry(ctx: Context, now: EpochSeconds) -> list[InvoiceId]:
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "opened"
++        if invoice["status"] == "open"
+         and invoice["next_attempt_at"] is not None
+         and invoice["next_attempt_at"] <= now
+     ]
+diff --git a/tests/test_dunning.py b/tests/test_dunning.py
+new file mode 100644
+index 0000000..1d630b4
+--- /dev/null
++++ b/tests/test_dunning.py
+@@ -0,0 +1,36 @@
++from conftest import DAY
++
++
++def test_due_retry_pays_invoice_and_recovers_subscription(world):
++    customer = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    subscription = world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(customer["id"])
++
++    assert invoice["status"] == "open"
++    assert invoice["attempt_count"] == 1
++    assert invoice["next_attempt_at"] == world.clock.now() + DAY
++    assert subscription["status"] == "past_due"
++
++    world.advance_days(1)
++
++    assert len(world.gateway.charges) == 2
++    assert invoice["status"] == "paid"
++    assert invoice["attempt_count"] == 1
++    assert invoice["next_attempt_at"] is None
++    assert subscription["status"] == "active"
++
++
++def test_due_retries_eventually_mark_subscription_unpaid(world):
++    customer = world.customer(last4="0002")
++    subscription = world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(customer["id"])
++
++    for days, attempts in [(1, 2), (2, 3), (4, 4)]:
++        world.advance_days(days)
++        assert invoice["attempt_count"] == attempts
++
++    assert len(world.gateway.charges) == 4
++    assert invoice["status"] == "open"
++    assert invoice["next_attempt_at"] is None
++    assert subscription["status"] == "unpaid"

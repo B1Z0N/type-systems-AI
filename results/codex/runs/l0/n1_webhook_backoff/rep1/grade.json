@@ -1,0 +1,42 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "fields": {
+    "delays_seconds": {
+      "ok": true,
+      "got": [
+        60,
+        120,
+        240,
+        480
+      ],
+      "want": [
+        60,
+        120,
+        240,
+        480
+      ]
+    },
+    "total_attempts": {
+      "ok": true,
+      "got": 5,
+      "want": 5
+    },
+    "final_status": {
+      "ok": true,
+      "got": "failed",
+      "want": "failed"
+    }
+  },
+  "answer": {
+    "delays_seconds": [
+      60,
+      120,
+      240,
+      480
+    ],
+    "total_attempts": 5,
+    "final_status": "failed"
+  },
+  "answer_error": null
+}

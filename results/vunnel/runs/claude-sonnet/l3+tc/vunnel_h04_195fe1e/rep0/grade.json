@@ -1,0 +1,14 @@
+{
+  "score": 0.6666666666666666,
+  "passed": false,
+  "target_passed": 2,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [
+    "tests/unit/providers/alma/test_alma.py::test_fix_dates_stable_across_runs"
+  ],
+  "answer": {
+    "summary": "The alma parser now accepts an optional fixdater, works as a context manager (used by the provider), and adds database_specific.anchore.fixes entries dated from each advisory's UTC published date to every range with a fixed event, including deep-copied library package clones, while keeping the record-level advisory marker."
+  },
+  "answer_error": null
+}

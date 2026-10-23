@@ -1,0 +1,7 @@
+Customers whose card keeps getting declined are charged far too often. With the default dunning
+policy, retries should follow the policy's schedule, but instead the card is charged again on
+every billing cycle run: after the first week an invoice shows 8 charge attempts instead of 4, and
+the subscription never reaches its final dunning state on schedule. Find the root cause and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

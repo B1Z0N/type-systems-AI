@@ -1,0 +1,29 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 7dd975b..8e305b7 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -66,4 +66,4 @@ def recover(ctx, invoice):
+         if inv["status"] == "open" and inv["id"] != invoice["id"]
+     ]
+     if not outstanding:
+-        pass
++        transition(ctx, subscription, "active")
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..8ee3ded 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,14 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_recovery_after_retry_succeeds(world):
++    cus = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    assert sub["status"] == "past_due"
++    world.advance_days(1)
++    assert sub["status"] == "active"
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"

@@ -1,0 +1,1 @@
+{"summary": "Added PluginOverrideMode (FAIL/REPLACE/IGNORE, env-driven via VUNNEL_PLUGIN_OVERRIDE_MODE) and a mode parameter on register() to control collisions with existing providers."}

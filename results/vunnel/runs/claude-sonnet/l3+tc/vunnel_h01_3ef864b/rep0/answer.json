@@ -1,0 +1,1 @@
+{"summary": "Made chainguard-libraries version markers configurable via Config.version_markers (defaults now include npm and golang), with null-disable, empty-marker and non-map validation, and wired into the OpenVEX parser and CLI config output."}

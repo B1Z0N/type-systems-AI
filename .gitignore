@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+build/
+# results are committed (events gzipped); local-only runs and logs are not
+results/pilot/
+results/smoke/
+results/logs/
+results/**/events.jsonl
+results/**/stderr.txt

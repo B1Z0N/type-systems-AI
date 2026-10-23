@@ -1,0 +1,1 @@
+{"summary": "Added a per-customer net_terms_days setting (default 7, validated non-negative) to create/update/API and used it for invoice due_at at finalization."}

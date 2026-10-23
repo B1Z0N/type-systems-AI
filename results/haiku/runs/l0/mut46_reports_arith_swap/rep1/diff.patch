@@ -1,0 +1,31 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index 42c597a..222f548 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -27,7 +27,7 @@ def mrr(ctx):
+         if subscription["status"] not in ("active", "past_due"):
+             continue
+         currency = ctx.store.require_customer(subscription["customer_id"])["currency"]
+-        totals[currency] = totals.get(currency, 0) - monthly_amount(ctx, subscription)
++        totals[currency] = totals.get(currency, 0) + monthly_amount(ctx, subscription)
+     return totals
+ 
+ 
+diff --git a/tests/test_reports.py b/tests/test_reports.py
+new file mode 100644
+index 0000000..fae90b4
+--- /dev/null
++++ b/tests/test_reports.py
+@@ -0,0 +1,12 @@
++from billing import catalog, reports
++
++
++def test_mrr_normalises_monthly_and_yearly_positively(world):
++    monthly_30 = catalog.create_price(world.ctx, world.plan["id"], "usd", "per_unit", unit_amount=3000)
++    yearly_120 = catalog.create_price(
++        world.ctx, world.team["id"], "usd", "per_unit", unit_amount=12000, interval="year"
++    )
++    world.engine.subscribe(world.customer(email="m@example.com")["id"], [(monthly_30["id"], 1)])
++    world.engine.subscribe(world.customer(email="y@example.com")["id"], [(yearly_120["id"], 1)])
++
++    assert reports.mrr(world.ctx) == {"usd": 4000}

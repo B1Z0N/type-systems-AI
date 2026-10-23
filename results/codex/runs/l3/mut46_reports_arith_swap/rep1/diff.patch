@@ -1,0 +1,35 @@
+diff --git a/billing/reports.py b/billing/reports.py
+index db1a68e..a845803 100644
+--- a/billing/reports.py
++++ b/billing/reports.py
+@@ -42,7 +42,7 @@ def mrr(ctx: Context) -> dict[CurrencyCode, Cents]:
+         if subscription["status"] not in ("active", "past_due"):
+             continue
+         currency = ctx.store.require_customer(subscription["customer_id"])["currency"]
+-        totals[currency] = Cents(totals.get(currency, Cents(0)) - monthly_amount(ctx, subscription))
++        totals[currency] = Cents(totals.get(currency, Cents(0)) + monthly_amount(ctx, subscription))
+     return totals
+ 
+ 
+diff --git a/tests/test_reports.py b/tests/test_reports.py
+new file mode 100644
+index 0000000..a6ca124
+--- /dev/null
++++ b/tests/test_reports.py
+@@ -0,0 +1,16 @@
++from billing import catalog, reports
++
++
++def test_mrr_adds_monthly_and_annual_subscriptions(world):
++    monthly = catalog.create_price(
++        world.ctx, world.plan["id"], "usd", "per_unit", unit_amount=3000
++    )
++    annual = catalog.create_price(
++        world.ctx, world.plan["id"], "usd", "per_unit", unit_amount=12000, interval="year"
++    )
++    monthly_customer = world.customer(email="monthly@example.com")
++    annual_customer = world.customer(email="annual@example.com")
++    world.engine.subscribe(monthly_customer["id"], [(monthly["id"], 1)])
++    world.engine.subscribe(annual_customer["id"], [(annual["id"], 1)])
++
++    assert reports.mrr(world.ctx) == {"usd": 4000}

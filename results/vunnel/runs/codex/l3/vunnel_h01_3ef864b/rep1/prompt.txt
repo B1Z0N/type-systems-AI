@@ -1,0 +1,20 @@
+The chainguard-libraries provider silently drops every npm and golang product from the
+OpenVEX feed: only pypi and maven products survive `_filter_statements`, because the
+per-ecosystem version markers are hardcoded.
+
+Make the markers configurable:
+- Add a `version_markers` option to the provider's `Config`: a map from purl type to the
+  marker a Chainguard-built version must contain. Defaults:
+  `{"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}`.
+- The OpenVEX parser takes `version_markers` and exposes it as `parser.version_markers`;
+  products are kept only if their purl type has a marker and their version contains it.
+- Config files merge into the default map key by key; a `null` value disables that
+  ecosystem (the key disappears from the resulting map).
+- An empty marker is rejected with `ValueError("empty version marker for ['<type>']")`
+  (listing the offending types).
+- A non-map value (for example a string from an environment variable override) is
+  rejected with a `ValueError` whose message contains `version_markers must be a map`.
+- The option shows up in the CLI's config output like the provider's other options.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

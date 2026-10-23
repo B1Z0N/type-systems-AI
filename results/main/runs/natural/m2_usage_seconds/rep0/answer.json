@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds (floored from ms input), while report_usage, the engine and POST /usage still accept and return milliseconds and period aggregation compares in seconds."}

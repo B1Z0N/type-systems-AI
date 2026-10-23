@@ -1,0 +1,1 @@
+{"summary": "Added subscriptions.extend_trial (plus a BillingEngine.extend_trial wrapper) that shifts trial_end and current_period_end by whole days, emits subscription.updated, and validates days and trialing state."}

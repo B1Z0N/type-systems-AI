@@ -1,0 +1,61 @@
+id: mut57_engine_bool_swap
+category: bugfix
+stratum: type_relevant
+origin: mutant
+title: Random bool swap mutant in engine.py
+read_only: false
+bug_kind: bool_swap
+checker_catches_at: l2
+relevant_files:
+- engine.py
+mutations:
+- file: engine.py
+  find: |2
+            self.ctx = Context(clock, gateway, transport, dunning_policy or DEFAULT_POLICY, fx)
+  replace: |2
+            self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+
+
+  def test_customer_without_card_enters_dunning(world):
+      cus = world.customer(card=False)
+      sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+      [inv] = world.engine.invoices_for(cus["id"])
+      assert inv["attempt_count"] == 1
+      assert inv["next_attempt_at"] is not None
+      assert sub["status"] == "past_due"
+  ```
+
+  It fails with:
+
+  ```
+  TypeError: 'NoneType' object is not subscriptable
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: engine.py
+  function: __init__
+grader:
+  type: tests
+  target_tests:
+  - base/test_dunning_refunds.py::test_cancel_policy_marks_uncollectible
+  - base/test_dunning_refunds.py::test_customer_without_card_enters_dunning
+  - base/test_dunning_refunds.py::test_failed_payment_goes_past_due_then_unpaid
+  - base/test_dunning_refunds.py::test_recovery_after_retry_succeeds
+  - base/test_dunning_refunds.py::test_retries_exhausted_after_cancel_marks_uncollectible
+  - base/test_lifecycle.py::test_void_restores_credit
+  - base/test_webhooks_reports_api.py::test_mrr_and_aging
+mutant:
+  site: engine.py:37
+  operator: bool_swap
+  index: 0
+  hidden_failing: 7
+  mypy_errors_l3: 1
+  mypy_errors_l2: 1

@@ -1,0 +1,13 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index de49c02..24b4d65 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -49,7 +49,7 @@ def records_in_period(
+ ) -> list[UsageRecord]:
+     start = to_millis(period_start)
+     end = to_millis(period_end)
+-    records = [record for record in ctx.store.usage_for(subscription_id, price_id) if start < record["timestamp"] < end]
++    records = [record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end]
+     return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
+ 
+ 

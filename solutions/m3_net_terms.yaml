@@ -1,0 +1,35 @@
+edits:
+  - file: models.py
+    find: "    tax_exempt: bool\n    default_payment_method: PaymentMethodId | None\n"
+    replace: "    tax_exempt: bool\n    net_terms_days: int\n    default_payment_method: PaymentMethodId | None\n"
+  - file: customers.py
+    find: "    metadata: dict[str, str] | None = None,\n) -> Customer:\n    if not is_supported(currency):"
+    replace: "    metadata: dict[str, str] | None = None,\n    net_terms_days: int = INVOICE_NET_DAYS,\n) -> Customer:\n    _validate_terms(net_terms_days)\n    if not is_supported(currency):"
+  - file: customers.py
+    find: |
+              "tax_exempt": tax_exempt,
+              "default_payment_method": None,
+    replace: |
+              "tax_exempt": tax_exempt,
+              "net_terms_days": net_terms_days,
+              "default_payment_method": None,
+  - file: customers.py
+    find: "    tax_exempt: bool | None = None,\n) -> Customer:\n    customer = ctx.store.require_customer(customer_id)\n"
+    replace: "    tax_exempt: bool | None = None,\n    net_terms_days: int | None = None,\n) -> Customer:\n    customer = ctx.store.require_customer(customer_id)\n    if net_terms_days is not None:\n        _validate_terms(net_terms_days)\n        customer[\"net_terms_days\"] = net_terms_days\n"
+  - file: customers.py
+    find: "def _validate_email(email: str) -> str:"
+    replace: "def _validate_terms(days: int) -> None:\n    if days < 0:\n        raise ValidationError(\"net_terms_days cannot be negative\")\n\n\ndef _validate_email(email: str) -> str:"
+  - file: customers.py
+    find: "    DEFAULT_CURRENCY,\n"
+    replace: "    DEFAULT_CURRENCY,\n    INVOICE_NET_DAYS,\n"
+  - file: invoices.py
+    find: 'invoice["due_at"] = EpochSeconds(now + INVOICE_NET_DAYS * SECONDS_PER_DAY)'
+    replace: |-
+      terms = ctx.store.require_customer(invoice["customer_id"])["net_terms_days"]
+          invoice["due_at"] = EpochSeconds(now + terms * SECONDS_PER_DAY)
+  - file: invoices.py
+    find: "    INVOICE_NET_DAYS,\n"
+    replace: ""
+  - file: api.py
+    find: "        tax_region=_optional_str(body, \"tax_region\"),\n    )\n    return 201, customer_json(customer)"
+    replace: "        tax_region=_optional_str(body, \"tax_region\"),\n        net_terms_days=_int(body, \"net_terms_days\", 7),\n    )\n    return 201, customer_json(customer)"

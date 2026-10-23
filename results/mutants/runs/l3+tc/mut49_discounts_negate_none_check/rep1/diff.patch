@@ -1,0 +1,13 @@
+diff --git a/billing/discounts.py b/billing/discounts.py
+index 491c280..4d48857 100644
+--- a/billing/discounts.py
++++ b/billing/discounts.py
+@@ -101,7 +101,7 @@ def _eligible(coupon: Coupon, line: InvoiceLine, plan_of: dict[PriceId, PlanId])
+     if plans is None:
+         return True
+     price_id = line["price_id"]
+-    return price_id is None and plan_of.get(price_id) in plans
++    return price_id is not None and plan_of.get(price_id) in plans
+ 
+ 
+ def line_discounts(

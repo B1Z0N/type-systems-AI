@@ -1,0 +1,196 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 8,
+  "duration_ms": 44720,
+  "api_duration_ms": 41379,
+  "cost_usd": 0.1180285,
+  "input_tokens": 16,
+  "output_tokens": 4587,
+  "cache_read_tokens": 113385,
+  "cache_write_tokens": 15197,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 128598,
+  "tool_calls": 7,
+  "tool_calls_by_kind": {
+    "read": 4,
+    "edit": 2,
+    "typecheck": 1
+  },
+  "reads": 4,
+  "searches": 0,
+  "edits": 2,
+  "test_runs": 0,
+  "typecheck_runs": 2,
+  "script_runs": 0,
+  "tool_errors": 1,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "engine.py",
+    "ledger.py",
+    "payments.py",
+    "refunds.py"
+  ],
+  "files_edited": [
+    "api.py",
+    "engine.py"
+  ],
+  "unique_files_edited": 2,
+  "unique_files_read": 5,
+  "rereads": 2,
+  "read_chars": 16308,
+  "search_chars": 0,
+  "tool_output_chars": 17219,
+  "relevant_files_read": 5,
+  "exploration_precision": 1.0,
+  "exploration_recall": 0.8333333333333334,
+  "steps_before_first_edit": 4,
+  "final_message": "Partial refunds are in. The 24 existing tests and mypy pass, but I didn't add tests for the new behaviour, so partial refunds are unexercised.\n\n- **With an amount:** the refund is taken from the invoice's successful payments, oldest first. A payment becomes `partially_refunded` until it is fully refunded, then `refunded`. Each call creates one credit note with `refunded=True` and the refunded amount. An amount <= 0 or above what remains refundable raises `ValidationError`.\n- **Without an amount:** it refunds everything still refundable and returns applied account credit once. After partial refunds it refunds only the remainder.\n- **Nothing left:** `InvalidStateError`, including a second full refund.\n- **Where:** the changes are in `billing/refunds.py`, `billing/engine.py` and `billing/api.py`. The API takes an optional integer `amount` in the body of `POST /invoices/{id}/refund`.\n- **Credit-note guard:** an invoice that already has an account-credit note (from `credit_invoice`) still can't be refunded, as before. I applied that to partial refunds too, so the same money can't be given back twice. Say if you'd rather allow partial refunds there.\n- **Gateway failure:** if the gateway refuses partway through several payments, the payments already refunded stay refunded and no credit note is written. That matches the old full-refund behaviour.\n\nI also wrote `answer.json` in the repository root with the one-sentence summary.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/refunds.py"
+      ],
+      "read_paths": [
+        "billing/refunds.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && cat billing/refunds.py && grep -rn \"refund\" billing --include=*.py -il",
+      "output_chars": 4277,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/payments.py"
+      ],
+      "read_paths": [
+        "billing/payments.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "grep -rni \"refund\" billing README.md | grep -v \"^billing/refunds.py\"; cat billing/payments.py; grep -n \"Payment\" -A15 billing/models.py | head -50",
+      "output_chars": 6023,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/ledger.py",
+        "billing/api.py",
+        "billing/engine.py"
+      ],
+      "read_paths": [
+        "billing/ledger.py",
+        "billing/api.py",
+        "billing/engine.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "cat billing/ledger.py; sed -n 85,105p billing/api.py; grep -n \"_optional\\|^def _\" billing/api.py | head -20; sed -n 120,135p billing/engine.py; grep -n \"refund\" -B3 -A15 tests/test_credit_notes.py | head -120",
+      "output_chars": 4862,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/api.py"
+      ],
+      "read_paths": [
+        "billing/api.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "sed -n 15,40p billing/api.py; grep -n \"refund\" -B6 -A12 tests/test_lifecycle.py tests/test_webhooks_reports_api.py | head -100; grep -n \"def payments_for_invoice\" -A6 billing/store.py",
+      "output_chars": 1146,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "Cents",
+        "bool",
+        "CreditNote",
+        "0",
+        "refundable",
+        "0",
+        "CreditNote",
+        "CreditNote",
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run",
+        "typecheck"
+      ],
+      "command": "python3 - <<'EOF'\np='billing/refunds.py'\ns=open(p).read()\na=s.index(\"def refund_invoice\")\nb=s.index(\"def credit_invoice\")\nnew='''def _refundable(payment: Payment) -> Cents:\n    if payment[\"gateway_ref\"] is None:\n        return Cents(0)\n    return Cents(max(payment[\"amount\"] - payment[\"refunded_amount\"], 0))\n\n\ndef _credit_returned(ctx: Context, invoice: Invoice) -> bool:\n    return any(\n        entry[\"reason\"] == \"refund\" and entry[\"invoice_id\"] == invoice[\"id\"]\n        for entry in ctx.store.ledger_for(invoice[\"customer_id\"])\n    )\n\n\ndef refund_invoice(\n    ctx: Context, invoice_id: InvoiceId, reason: str = \"requested_by_customer\", amount: Cents | None = None\n) -> CreditNote:\n    \"\"\"Refund paid money back to the original payment method, oldest payments first.\n\n    Without an amount, everything still refundable is refunded and any applied account credit is returned.\n    \"\"\"\n    invoice = ctx.store.require_invoice(invoice_id)\n    if invoice[\"status\"] != \"paid\":\n        raise InvalidStateError(\"only paid invoices can be refunded\")\n    if any(not note[\"refunded\"] for note in ctx.store.credit_notes_for(invoice_id)):\n        raise InvalidStateError(\"invoice has already been credited\")\n    payments = sorted(successful_payments(ctx, invoice[\"id\"]), key=lambda p: (p[\"created_at\"], p[\"id\"]))\n    refundable = Cents(sum(_refundable(payment) for payment in payments))\n    return_credit = amount is None and invoice[\"credit_applied\"] > 0 and not _credit_returned(ctx, invoice)\n    if amount is None:\n        if refundable == 0 and not return_credit:\n            raise InvalidStateError(\"invoice has nothing left to refund\")\n        to_refund = refundable\n    else:\n        if amount <= 0:\n            raise ValidationError(\"refund amount must be positive\")\n        if refundable == 0:\n            raise InvalidStateError(\"invoice has nothing left to refund\")\n        if amount > refundable:\n            raise ValidationError(f\"cannot refund more than {refundable} on this invoice\")\n        to_refund = amount\n    left = to_refund\n    for payment in payments:\n        if left <= 0:\n            break\n        take = Cents(min(_refundable(payment), left))\n        if take <= 0:\n            continue\n        assert payment[\"gateway_ref\"] is not None\n        result = ctx.gateway.refund(payment[\"gateway_ref\"], take)\n        if not result[\"ok\"]:\n            raise InvalidStateError(f\"gateway refused refund for payment {payment['id']}\")\n        payment[\"refunded_amount\"] = Cents(payment[\"refunded_amount\"] + take)\n        payment[\"status\"] = \"refunded\" if payment[\"refunded_amount\"] >= payment[\"amount\"] else \"partially_refunded\"\n        left = Cents(left - take)\n        emit(ctx, \"payment.refunded\", {\"payment\": payment_json(payment)})\n    credit = invoice[\"credit_applied\"] if return_credit else Cents(0)\n    if credit > 0:\n        add_entry(ctx, invoice[\"customer_id\"], credit, \"refund\", invoice[\"id\"])\n    return _credit_note(ctx, invoice_id, Cents(to_refund + credit), reason, True)\n\n\n'''\ns=s[:a]+new+s[b:]\ns=s.replace(\"from .models import Cents, CreditNote, InvoiceId\",\"from .models import Cents, CreditNote, Invoice, InvoiceId, Payment\")\nopen(p,'w').write(s)\n\np='billing/engine.py'\ns=open(p).read()\ns=s.replace('''    def refund(self, invoice_id: InvoiceId, reason: str = \"requested_by_customer\") -> CreditNote:\n        return refunds.refund_invoice(self.ctx, invoice_id, reason)''','''    def refund(\n        self, invoice_id: InvoiceId, reason: str = \"requested_by_customer\", amount: Cents | None = None\n    ) -> CreditNote:\n        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)''')\nopen(p,'w').write(s)\n\np='billing/api.py'\ns=open(p).read()\ns=s.replace('''    note = engine.refund(InvoiceId(params[0]), _optional_str(body, \"reason\") or \"requested_by_customer\")''','''    amount = Cents(_int(body, \"amount\")) if body.get(\"amount\") is not None else None\n    note = engine.refund(InvoiceId(params[0]), _optional_str(body, \"reason\") or \"requested_by_customer\", amount)''')\nopen(p,'w').write(s)\nEOF\ngrep -n \"^from .models\\|Cents\" billing/engine.py billing/api.py | head; echo '{\"summary\": \"Added optional partial refund amounts to refund_invoice, BillingEngine.refund and the refund API, spreading refunds over payments oldest first with partially_refunded status.\"}' > answer.json\n.venv/bin/python -m pytest -q 2>&1 | tail -3; .venv/bin/python -m mypy billing | tail -5",
+      "output_chars": 699,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "billing/api.py",
+        "billing/engine.py"
+      ],
+      "read_paths": [
+        "billing/engine.py"
+      ],
+      "kinds": [
+        "edit",
+        "read"
+      ],
+      "command": "sed -i 's/^from .models import CurrencyCode, CustomerId/from .models import Cents, CurrencyCode, CustomerId/' billing/api.py && sed -n 7,12p billing/engine.py",
+      "output_chars": 70,
+      "error": true,
+      "subagent": false
+    },
+    {
+      "kind": "typecheck",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "run",
+        "typecheck"
+      ],
+      "command": "python3 - <<'EOF'\np='billing/api.py'\ns=open(p).read()\ns=s.replace(\"from .models import CurrencyCode,\",\"from .models import Cents, CurrencyCode,\",1)\nopen(p,'w').write(s)\np='billing/engine.py'\ns=open(p).read()\ns=s.replace(\"from .models import (\\n\",\"from .models import (\\n    Cents,\\n\",1)\nopen(p,'w').write(s)\nEOF\n.venv/bin/python -m pytest -q 2>&1 | tail -2; .venv/bin/python -m mypy billing | tail -3",
+      "output_chars": 142,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 45.5,
+  "timed_out": false,
+  "exit_code": 0
+}

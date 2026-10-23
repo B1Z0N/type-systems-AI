@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds, converting from/to milliseconds at the report_usage input and the POST /usage response so clients and billing results are unchanged."}

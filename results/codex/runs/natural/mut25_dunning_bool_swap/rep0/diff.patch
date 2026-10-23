@@ -1,0 +1,54 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 16c80af..c60e6f5 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -61,7 +61,9 @@ def due_for_retry(ctx, now):
+     due_invoices = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "open" or invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
++        if invoice["status"] == "open"
++        and invoice["next_attempt_at"] is not None
++        and invoice["next_attempt_at"] <= now
+     ]
+     due_invoices.sort(key=lambda invoice: (invoice["next_attempt_at"], invoice["id"]))
+     return [invoice["id"] for invoice in due_invoices]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..5645847 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,34 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_declined_card_retries_only_on_dunning_schedule(world):
++    cus = world.customer(last4="0002")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(cus["id"])
++    first_attempt_at = invoice["finalized_at"]
++
++    assert invoice["attempt_count"] == 1
++    assert invoice["next_attempt_at"] == first_attempt_at + 86_400
++    assert sub["status"] == "past_due"
++
++    for day, expected_attempts, next_day in (
++        (0, 1, 1),
++        (1, 2, 3),
++        (2, 2, 3),
++        (3, 3, 7),
++        (4, 3, 7),
++        (5, 3, 7),
++        (6, 3, 7),
++        (7, 4, None),
++        (8, 4, None),
++    ):
++        world.clock.set(first_attempt_at + day * 86_400)
++        world.engine.run_cycle()
++        assert invoice["attempt_count"] == expected_attempts
++        assert len(world.gateway.charges) == expected_attempts
++        assert invoice["next_attempt_at"] == (
++            first_attempt_at + next_day * 86_400 if next_day is not None else None
++        )
++        assert sub["status"] == ("unpaid" if day >= 7 else "past_due")

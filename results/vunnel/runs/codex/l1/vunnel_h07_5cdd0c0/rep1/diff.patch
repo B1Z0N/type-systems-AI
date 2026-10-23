@@ -1,0 +1,47 @@
+diff --git a/src/vunnel/providers/wolfi/parser.py b/src/vunnel/providers/wolfi/parser.py
+index 56bf2b3..489614f 100644
+--- a/src/vunnel/providers/wolfi/parser.py
++++ b/src/vunnel/providers/wolfi/parser.py
+@@ -64,7 +64,7 @@ class Parser(abc.ABC):
+     def build_reference_links(self, vulnerability_id: str) -> list:
+         urls = []
+         urls.append(f"{self.security_reference_url}/{vulnerability_id}")
+-        urls.extend(vulnerability.build_reference_links(vulnerability_id))
++        urls.extend(vulnerability.build_reference_links(vulnerability_id) or [])
+         return urls
+ 
+     @abc.abstractmethod
+diff --git a/tests/unit/providers/wolfi/test_wolfi.py b/tests/unit/providers/wolfi/test_wolfi.py
+index e88bf5c..21822fb 100644
+--- a/tests/unit/providers/wolfi/test_wolfi.py
++++ b/tests/unit/providers/wolfi/test_wolfi.py
+@@ -22,6 +22,29 @@ OSV_SCHEMA_PATH = (
+ 
+ 
+ class TestParser:
++    @pytest.mark.parametrize("namespace", ["wolfi", "chainguard"])
++    def test_secdb_reference_links_for_unknown_id(self, namespace, tmpdir, auto_fake_fixdate_finder):
++        p = SecDBParser(
++            workspace=workspace.Workspace(tmpdir, "test", create=True),
++            url="https://example.com/security.json",
++            namespace=namespace,
++        )
++
++        assert p.build_reference_links("GO-2026-5932") == [f"{p.security_reference_url}/GO-2026-5932"]
++        assert p.build_reference_links("CVE-2026-5932") == [
++            f"{p.security_reference_url}/CVE-2026-5932",
++            "https://www.cve.org/CVERecord?id=CVE-2026-5932",
++            "https://nvd.nist.gov/vuln/detail/CVE-2026-5932",
++        ]
++
++        records = p._normalize(
++            "rolling",
++            {"packages": [{"pkg": {"name": "go", "secfixes": {"1.2-r0": ["GO-2026-5932"]}}}]},
++        )
++        assert records["GO-2026-5932"]["Vulnerability"]["Link"] == (
++            f"{p.security_reference_url}/GO-2026-5932"
++        )
++
+     @pytest.fixture()
+     def mock_raw_data(self, helpers):
+         """

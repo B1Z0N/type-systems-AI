@@ -1,0 +1,20 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "sets": {
+    "functions": {
+      "precision": 1.0,
+      "recall": 1.0,
+      "f1": 1.0,
+      "missed": [],
+      "false_positives": []
+    }
+  },
+  "answer": {
+    "functions": [
+      "usage.report_usage",
+      "usage.records_in_period"
+    ]
+  },
+  "answer_error": null
+}

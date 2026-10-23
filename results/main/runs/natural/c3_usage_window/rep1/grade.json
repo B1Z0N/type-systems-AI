@@ -1,0 +1,33 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "fields": {
+    "timestamp_unit": {
+      "ok": true,
+      "got": "milliseconds",
+      "want": "milliseconds"
+    },
+    "start_inclusive": {
+      "ok": true,
+      "got": true,
+      "want": true
+    },
+    "end_inclusive": {
+      "ok": true,
+      "got": false,
+      "want": false
+    },
+    "billing_timing": {
+      "ok": true,
+      "got": "in_arrears",
+      "want": "in_arrears"
+    }
+  },
+  "answer": {
+    "timestamp_unit": "milliseconds",
+    "start_inclusive": true,
+    "end_inclusive": false,
+    "billing_timing": "in_arrears"
+  },
+  "answer_error": null
+}

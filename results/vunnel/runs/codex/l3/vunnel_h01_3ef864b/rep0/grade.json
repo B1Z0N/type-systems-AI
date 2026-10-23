@@ -1,0 +1,16 @@
+{
+  "score": 0.7,
+  "passed": false,
+  "target_passed": 7,
+  "target_total": 10,
+  "regressions": [],
+  "failed_targets": [
+    "tests/unit/providers/chainguard_libraries/test_openvex_parser.py::TestOpenVEXParser::test_empty_marker_rejected",
+    "tests/unit/providers/chainguard_libraries/test_openvex_parser.py::TestOpenVEXParser::test_null_marker_disables_ecosystem",
+    "tests/unit/providers/chainguard_libraries/test_provider.py::test_version_markers_rejects_env_string"
+  ],
+  "answer": {
+    "summary": "Made Chainguard library version markers configurable with defaults, per-ecosystem overrides, validation, and CLI visibility."
+  },
+  "answer_error": null
+}

@@ -1,0 +1,150 @@
+diff --git a/src/vunnel/providers/__init__.py b/src/vunnel/providers/__init__.py
+index 31c75bc..2f62d21 100644
+--- a/src/vunnel/providers/__init__.py
++++ b/src/vunnel/providers/__init__.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
+ import logging
++import os
++from enum import Enum
+ from importlib.metadata import entry_points
+ 
+ from vunnel.providers import (
+@@ -35,6 +37,21 @@ from vunnel.providers import (
+ 
+ from vunnel.provider import get_provider_tags
+ 
++
++class PluginOverrideMode(str, Enum):
++    FAIL = "fail"
++    REPLACE = "replace"
++    IGNORE = "ignore"
++
++    @classmethod
++    def from_env(cls) -> PluginOverrideMode:
++        value = os.getenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "").lower()
++        try:
++            return cls(value)
++        except ValueError:
++            return cls.FAIL
++
++
+ _providers = {
+     # vulnerability providers
+     alma.Provider.name(): alma.Provider,
+@@ -80,9 +97,14 @@ def versions() -> dict:
+     return {n: p.version() for (n, p) in _providers.items()}
+ 
+ 
+-def register(name: str, cls) -> None:
++def register(name: str, cls, mode: PluginOverrideMode | None = None) -> None:
++    if mode is None:
++        mode = PluginOverrideMode.from_env()
+     if name in _providers and _providers[name] != cls:
+-        raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode is PluginOverrideMode.FAIL:
++            raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode is PluginOverrideMode.IGNORE:
++            return
+     _providers[name] = cls
+ 
+ 
+diff --git a/tests/unit/test_provider_registration.py b/tests/unit/test_provider_registration.py
+new file mode 100644
+index 0000000..3c3a552
+--- /dev/null
++++ b/tests/unit/test_provider_registration.py
+@@ -0,0 +1,92 @@
++import pytest
++
++from vunnel import providers
++
++
++class BuiltinProvider:
++    pass
++
++
++class PluginProvider:
++    pass
++
++
++@pytest.fixture
++def registry(monkeypatch):
++    registered = {"builtin": BuiltinProvider}
++    monkeypatch.setattr(providers, "_providers", registered)
++    return registered
++
++
++@pytest.mark.parametrize(
++    "value,expected",
++    [
++        (None, "FAIL"),
++        ("", "FAIL"),
++        ("unknown", "FAIL"),
++        ("fail", "FAIL"),
++        ("FaIl", "FAIL"),
++        ("replace", "REPLACE"),
++        ("RePlAcE", "REPLACE"),
++        ("ignore", "IGNORE"),
++        ("IgNoRe", "IGNORE"),
++    ],
++)
++def test_override_mode_from_env(monkeypatch, value, expected):
++    if value is None:
++        monkeypatch.delenv("VUNNEL_PLUGIN_OVERRIDE_MODE", raising=False)
++    else:
++        monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", value)
++
++    assert providers.PluginOverrideMode.from_env() is getattr(providers.PluginOverrideMode, expected)
++
++
++@pytest.mark.parametrize("mode", ["FAIL", "REPLACE", "IGNORE"])
++def test_register_new_name_in_every_mode(registry, mode):
++    providers.register("plugin", PluginProvider, mode=getattr(providers.PluginOverrideMode, mode))
++
++    assert providers.provider_class("plugin") is PluginProvider
++
++
++@pytest.mark.parametrize("mode", ["FAIL", "REPLACE", "IGNORE"])
++def test_register_same_class_in_every_mode(registry, mode):
++    providers.register("builtin", BuiltinProvider, mode=getattr(providers.PluginOverrideMode, mode))
++
++    assert providers.provider_class("builtin") is BuiltinProvider
++
++
++def test_register_collision_fails(registry):
++    with pytest.raises(KeyError, match="already registered"):
++        providers.register("builtin", PluginProvider, mode=providers.PluginOverrideMode.FAIL)
++
++    assert providers.provider_class("builtin") is BuiltinProvider
++
++
++def test_register_collision_replaces(registry):
++    providers.register("builtin", PluginProvider, mode=providers.PluginOverrideMode.REPLACE)
++
++    assert providers.provider_class("builtin") is PluginProvider
++
++
++def test_register_collision_ignores(registry):
++    providers.register("builtin", PluginProvider, mode=providers.PluginOverrideMode.IGNORE)
++
++    assert providers.provider_class("builtin") is BuiltinProvider
++
++
++def test_register_reads_environment_at_each_call(monkeypatch, registry):
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "ignore")
++    providers.register("builtin", PluginProvider)
++    assert providers.provider_class("builtin") is BuiltinProvider
++
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "replace")
++    providers.register("builtin", PluginProvider)
++    assert providers.provider_class("builtin") is PluginProvider
++
++
++def test_explicit_mode_takes_precedence_over_environment(monkeypatch, registry):
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "ignore")
++
++    providers.register("builtin", PluginProvider, mode=providers.PluginOverrideMode.REPLACE)
++
++    assert providers.provider_class("builtin") is PluginProvider

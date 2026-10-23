@@ -1,0 +1,10 @@
+With the engine's default dunning policy, a customer subscribes (no trial) and their card is
+declined on every single attempt. Assume the billing cycle runs every day.
+
+How many charge attempts are made in total for the first invoice, how many days after the
+invoice was finalized is the last attempt, and what are the final statuses of the
+subscription and of the invoice?
+
+Do not modify any files other than `answer.json`. When you are done, write your final answer as JSON to `answer.json` in the repository root, using exactly this shape:
+{"total_charge_attempts": <int>, "last_attempt_day": <int>,
+ "final_subscription_status": "<status>", "final_invoice_status": "<status>"}

@@ -1,0 +1,471 @@
+diff --git a/schema/vulnerability/os/schema-1.1.1.json b/schema/vulnerability/os/schema-1.1.1.json
+new file mode 100644
+index 0000000..1cb1938
+--- /dev/null
++++ b/schema/vulnerability/os/schema-1.1.1.json
+@@ -0,0 +1,209 @@
++{
++  "$schema": "http://json-schema.org/draft-04/schema#",
++  "type": "object",
++  "title": "os-vulnerability",
++  "description": "represents vulnerability records for common linux distributions",
++  "properties": {
++    "Vulnerability": {
++      "type": "object",
++      "properties": {
++        "CVSS": {
++          "type": "array",
++          "items": [
++            {
++              "type": "object",
++              "properties": {
++                "base_metrics": {
++                  "type": "object",
++                  "properties": {
++                    "base_score": {
++                      "type": "number"
++                    },
++                    "base_severity": {
++                      "type": "string"
++                    },
++                    "exploitability_score": {
++                      "type": "number"
++                    },
++                    "impact_score": {
++                      "type": "number"
++                    }
++                  },
++                  "required": [
++                    "base_score",
++                    "base_severity",
++                    "exploitability_score",
++                    "impact_score"
++                  ]
++                },
++                "status": {
++                  "type": "string"
++                },
++                "vector_string": {
++                  "type": "string"
++                },
++                "version": {
++                  "type": "string"
++                }
++              },
++              "required": [
++                "base_metrics",
++                "status",
++                "vector_string",
++                "version"
++              ]
++            }
++          ]
++        },
++        "Description": {
++          "type": "string"
++        },
++        "FixedIn": {
++          "type": "array",
++          "items": [
++            {
++              "type": "object",
++              "properties": {
++                "Arch": {
++                  "type": "string"
++                },
++                "Name": {
++                  "type": "string"
++                },
++                "NamespaceName": {
++                  "type": "string"
++                },
++                "VendorAdvisory": {
++                  "type": "object",
++                  "properties": {
++                    "AdvisorySummary": {
++                      "type": "array",
++                      "items": {}
++                    },
++                    "NoAdvisory": {
++                      "type": "boolean"
++                    }
++                  },
++                  "required": [
++                    "NoAdvisory"
++                  ]
++                },
++                "Version": {
++                  "type": "string"
++                },
++                "VersionFormat": {
++                  "type": "string"
++                },
++                "Availability": {
++                  "type": "object",
++                  "properties": {
++                    "Date": {
++                      "type": "string"
++                    },
++                    "Kind": {
++                      "type": "string"
++                    }
++                  }
++                },
++                "VulnerableRange": {
++                  "type": ["string", "null"]
++                },
++                "Module": {
++                  "type": ["string", "null"]
++                }
++              },
++              "required": [
++                "Name",
++                "NamespaceName",
++                "Version",
++                "VersionFormat"
++              ]
++            }
++          ]
++        },
++        "Link": {
++          "type": "string"
++        },
++        "Metadata": {
++          "type": "object",
++          "properties": {
++            "Issued": {
++              "type": "string",
++              "description": "date the vulnerability was published"
++            },
++            "Updated": {
++              "type": "string",
++              "description": "date the vulnerability was last updated"
++            },
++            "Withdrawn": {
++              "type": "string",
++              "description": "date the vulnerability was withdrawn"
++            },
++            "RefId": {
++              "type": "string"
++            },
++            "CVE": {
++              "type": "array",
++              "items": [
++                {
++                  "type": "object",
++                  "properties": {
++                    "Name": {
++                      "type": "string"
++                    },
++                    "Link": {
++                      "type": "string"
++                    }
++                  },
++                  "required": [
++                    "Name"
++                  ]
++                }
++              ]
++            },
++            "NVD": {
++              "type": "object",
++              "properties": {
++                "CVSSv2": {
++                  "type": "object",
++                  "properties": {
++                    "Score": {
++                      "type": "number"
++                    },
++                    "Vectors": {
++                      "type": "string"
++                    }
++                  },
++                  "required": [
++                    "Score"
++                  ]
++                }
++              }
++            }
++          }
++        },
++        "Name": {
++          "type": "string"
++        },
++        "NamespaceName": {
++          "type": "string"
++        },
++        "Severity": {
++          "type": "string"
++        }
++      },
++      "required": [
++        "Description",
++        "FixedIn",
++        "Link",
++        "Metadata",
++        "Name",
++        "NamespaceName",
++        "Severity"
++      ]
++    }
++  },
++  "required": [
++    "Vulnerability"
++  ]
++}
+diff --git a/src/vunnel/providers/oracle/__init__.py b/src/vunnel/providers/oracle/__init__.py
+index 77a2935..ab26592 100644
+--- a/src/vunnel/providers/oracle/__init__.py
++++ b/src/vunnel/providers/oracle/__init__.py
+@@ -24,7 +24,7 @@ class Config:
+ 
+ 
+ class Provider(provider.Provider):
+-    __schema__ = schema.OSSchema()
++    __schema__ = schema.OSSchema("1.1.1")
+     __distribution_version__ = int(__schema__.major_version)
+ 
+     def __init__(self, root: str, config: Config | None = None):
+diff --git a/src/vunnel/providers/oracle/oval_parser.py b/src/vunnel/providers/oracle/oval_parser.py
+index 6853a18..68c6a26 100644
+--- a/src/vunnel/providers/oracle/oval_parser.py
++++ b/src/vunnel/providers/oracle/oval_parser.py
+@@ -32,6 +32,7 @@ class Config:
+     is_installed_pattern: re.Pattern | None = None
+     pkg_version_pattern: re.Pattern | None = None
+     pkg_module_pattern: re.Pattern | None = None
++    arch_pattern: re.Pattern | None = None
+     signed_with_pattern: re.Pattern | None = None
+     platform_version_pattern: re.Pattern | None = None
+ 
+@@ -180,6 +181,8 @@ def _process_definition(def_element, vuln_dict, config: Config):  # noqa: PLR091
+                     "VersionFormat": "rpm",  # hard code version format for now
+                     "NamespaceName": ns_name,
+                 }
++                if x[3]:
++                    fixed_el["Arch"] = x[3]
+                 # add Available object if fix version exists and issued date is available
+                 if x[1] != "None" and issued:
+                     fixed_el["Available"] = {"Date": date.normalize_date(issued), "Kind": "advisory"}
+@@ -234,11 +237,39 @@ def _process_criteria(element_a, oval_ns, config: Config):
+ 
+         if ns_name:  # proceed only if a platform is found
+             # Filter out duplicate (package, version) tuples
+-            ns_pkgs_dict[ns_name] = {tuple(list(x) + [ns_module]) for x in group if isinstance(x, tuple)}  # noqa: RUF005
++            ns_pkgs_dict.setdefault(ns_name, set()).update(
++                (x[0], x[1], ns_module, x[2]) for x in group if isinstance(x, tuple)
++            )
+         else:
+             # logger.debug('Namespace for the criteria not found, ignoring criteria')
+             continue  # ignore this group of conditions if namespace is not found
+ 
++    # A version present on every architecture needs only one unscoped entry.
++    for ns_name, packages in ns_pkgs_dict.items():
++        by_package = {}
++        for pkg, version, module, arch in packages:
++            by_package.setdefault((pkg, module), {}).setdefault(version, set()).add(arch)
++        package_arches = {
++            package: set().union(*(arches - {None} for arches in versions.values()))
++            for package, versions in by_package.items()
++        }
++        ns_pkgs_dict[ns_name] = {
++            (
++                pkg,
++                version,
++                module,
++                None
++                if None in by_package[(pkg, module)][version]
++                or (
++                    len(package_arches[(pkg, module)]) > 1
++                    and by_package[(pkg, module)][version] == package_arches[(pkg, module)]
++                )
++                else arch,
++            )
++            for pkg, version, module, arch in packages
++            if arch is None or None not in by_package[(pkg, module)][version]
++        }
++
+     return ns_pkgs_dict
+ 
+ 
+@@ -246,7 +277,7 @@ def _get_all_criterion(element_b, oval_ns, config: Config):
+     """
+     Search for all the criterion elements under the given criteria element and
+     parse contents into a list. Returned list may contain tuples and or simple strings.
+-    Package name and version found in the comment of a criterion element is represented by a tuple.
++    Package name, version, and architecture found in criteria are represented by a tuple.
+     Platform version found in the comment of a criterion element is represented by a simple string.
+     :param element_b: criteria element
+     :param oval_ns: namespace URL of the oval
+@@ -258,10 +289,7 @@ def _get_all_criterion(element_b, oval_ns, config: Config):
+     ns_name = None
+     module_name = None
+     for criterion in element_b.iterfind(config.criterion_xpath_query.format(oval_ns)):
+-        if re.search(config.pkg_version_pattern, criterion.attrib["comment"]):
+-            pkg, version = re.search(config.pkg_version_pattern, criterion.attrib["comment"]).groups()
+-            collectibles.append((pkg, version))
+-        elif re.search(config.is_installed_pattern, criterion.attrib["comment"]):
++        if re.search(config.is_installed_pattern, criterion.attrib["comment"]):
+             ns_name = config.ns_format.format(
+                 re.search(config.is_installed_pattern, criterion.attrib["comment"]).group(1)
+             )
+@@ -271,6 +299,24 @@ def _get_all_criterion(element_b, oval_ns, config: Config):
+             final_ns_name = ns_name
+         if module_name:
+             final_module_name = module_name
++
++    collectibles.extend(_collect_packages(element_b, oval_ns, config))
+     if final_ns_name:
+         collectibles.append([final_ns_name, final_module_name])
+     return collectibles
++
++
++def _collect_packages(criteria, oval_ns, config: Config, arch=None):
++    # Architecture applies to sibling package checks and their descendants.
++    packages = []
++    for criterion in criteria.findall(f"{oval_ns}criterion"):
++        match = re.search(config.arch_pattern, criterion.attrib["comment"])
++        if match:
++            arch = match.group(1)
++    for criterion in criteria.findall(f"{oval_ns}criterion"):
++        match = re.search(config.pkg_version_pattern, criterion.attrib["comment"])
++        if match:
++            packages.append((*match.groups(), arch))
++    for child in criteria.findall(f"{oval_ns}criteria"):
++        packages.extend(_collect_packages(child, oval_ns, config, arch))
++    return packages
+diff --git a/src/vunnel/providers/oracle/parser.py b/src/vunnel/providers/oracle/parser.py
+index 6eb2908..1539d02 100644
+--- a/src/vunnel/providers/oracle/parser.py
++++ b/src/vunnel/providers/oracle/parser.py
+@@ -24,6 +24,7 @@ ol_config.ns_pattern = re.compile(r"(\{http://oval.mitre.org/XMLSchema/.*\})\w*"
+ ol_config.is_installed_pattern = re.compile(r"Oracle Linux (\d+).*is installed")
+ ol_config.pkg_version_pattern = re.compile(r"(.*) is earlier than (.*)")
+ ol_config.pkg_module_pattern = re.compile(r"Module (.*) is enabled")
++ol_config.arch_pattern = re.compile(r"Oracle Linux arch is ([\w]+)")
+ ol_config.signed_with_pattern = re.compile(r"(.*) is signed with the (.*) key")
+ ol_config.platform_version_pattern = re.compile(r"Oracle Linux (\d+)")
+ 
+diff --git a/tests/unit/providers/oracle/test-fixtures/snapshots/ol:5/elsa-2007-0057.json b/tests/unit/providers/oracle/test-fixtures/snapshots/ol:5/elsa-2007-0057.json
+index 8a10b61..2299677 100644
+--- a/tests/unit/providers/oracle/test-fixtures/snapshots/ol:5/elsa-2007-0057.json
++++ b/tests/unit/providers/oracle/test-fixtures/snapshots/ol:5/elsa-2007-0057.json
+@@ -114,5 +114,5 @@
+       "Severity": "Medium"
+     }
+   },
+-  "schema": "https://raw.githubusercontent.com/anchore/vunnel/main/schema/vulnerability/os/schema-1.1.0.json"
++  "schema": "https://raw.githubusercontent.com/anchore/vunnel/main/schema/vulnerability/os/schema-1.1.1.json"
+ }
+diff --git a/tests/unit/providers/oracle/test-fixtures/snapshots/ol:6/elsa-2018-4250.json b/tests/unit/providers/oracle/test-fixtures/snapshots/ol:6/elsa-2018-4250.json
+index b3362d6..1ac2ac3 100644
+--- a/tests/unit/providers/oracle/test-fixtures/snapshots/ol:6/elsa-2018-4250.json
++++ b/tests/unit/providers/oracle/test-fixtures/snapshots/ol:6/elsa-2018-4250.json
+@@ -100,5 +100,5 @@
+       "Severity": "High"
+     }
+   },
+-  "schema": "https://raw.githubusercontent.com/anchore/vunnel/main/schema/vulnerability/os/schema-1.1.0.json"
++  "schema": "https://raw.githubusercontent.com/anchore/vunnel/main/schema/vulnerability/os/schema-1.1.1.json"
+ }
+diff --git a/tests/unit/providers/oracle/test_oracle.py b/tests/unit/providers/oracle/test_oracle.py
+index eb674ef..d23bda0 100644
+--- a/tests/unit/providers/oracle/test_oracle.py
++++ b/tests/unit/providers/oracle/test_oracle.py
+@@ -1,11 +1,16 @@
+ from __future__ import annotations
+ 
+ import shutil
++from pathlib import Path
+ 
++import jsonschema
++import orjson
+ import pytest
+ from pytest_unordered import unordered
+-from vunnel import result, workspace
++
++from vunnel import result, schema, workspace
+ from vunnel.providers.oracle import Config, Provider, parser
++from vunnel.providers.oracle.oval_parser import parse
+ 
+ 
+ @pytest.mark.parametrize(
+@@ -301,6 +306,69 @@ def test_parse(tmpdir, helpers, input_file, expected):
+     assert vuln_dict == expected
+ 
+ 
++@pytest.mark.parametrize(
++    ("arch_packages", "expected", "root_or"),
++    [
++        (
++            {"aarch64": ["8.24.0-57.0.4.el7_9.3"], "x86_64": ["8.24.0-57.0.1.el7_9.3"]},
++            {("8.24.0-57.0.4.el7_9.3", "aarch64"), ("8.24.0-57.0.1.el7_9.3", "x86_64")},
++            True,
++        ),
++        (
++            {"aarch64": ["1.0-1"], "x86_64": ["1.0-1"]},
++            {("1.0-1", None)},
++            False,
++        ),
++        (
++            {"aarch64": ["1.0-1", "1.0-2"], "x86_64": ["1.0-1", "1.0-2"]},
++            {("1.0-1", None), ("1.0-2", None)},
++            False,
++        ),
++        (
++            {"aarch64": ["1.0-1", "1.0-2"], "x86_64": ["1.0-1"]},
++            {("1.0-1", None), ("1.0-2", "aarch64")},
++            False,
++        ),
++    ],
++)
++def test_architecture_specific_and_shared_fixes(tmp_path, arch_packages, expected, root_or):
++    branches = "".join(
++        '<criteria operator="AND">'
++        + ('<criterion comment="Oracle Linux 7 is installed"/>' if root_or else "")
++        + f'<criterion comment="Oracle Linux arch is {arch}"/>'
++        + '<criteria operator="OR">'
++        + "".join(f'<criterion comment="rsyslog is earlier than {version}"/>' for version in versions)
++        + "</criteria></criteria>"
++        for arch, versions in arch_packages.items()
++    )
++    criteria = (
++        f'<criteria operator="OR">{branches}</criteria>'
++        if root_or
++        else '<criteria operator="AND"><criterion comment="Oracle Linux 7 is installed"/>'
++        f'<criteria operator="OR">{branches}</criteria></criteria>'
++    )
++    oval = f"""<oval_definitions xmlns="http://oval.mitre.org/XMLSchema/oval-definitions-5">
++      <definitions><definition version="1"><metadata>
++        <title>ELSA-2022-4803: rsyslog security update</title>
++        <affected><platform>Oracle Linux 7</platform></affected>
++        <reference source="elsa" ref_id="ELSA-2022-4803" ref_url="https://linux.oracle.com/errata/ELSA-2022-4803.html"/>
++        <advisory><severity>IMPORTANT</severity><issued date="2022-01-01"/></advisory>
++      </metadata>{criteria}</definition></definitions>
++    </oval_definitions>"""
++    path = tmp_path / "oracle.xml"
++    path.write_text(oval)
++
++    records = parse(str(path), parser.ol_config)
++    fixes = records[("ELSA-2022-4803", "ol:7")][1]["Vulnerability"]["FixedIn"]
++
++    assert {(fix["Version"], fix.get("Arch")) for fix in fixes} == expected
++    assert len(fixes) == len(expected)
++    assert all(fix["Name"] == "rsyslog" for fix in fixes)
++    if root_or:
++        schema_path = Path(__file__).resolve().parents[4] / "schema/vulnerability/os/schema-1.1.1.json"
++        jsonschema.validate(records[("ELSA-2022-4803", "ol:7")][1], orjson.loads(schema_path.read_bytes()))
++
++
+ class TestKspliceFilterer:
+     @pytest.mark.parametrize(
+         ("input_vulnerability", "expected_output"),
+@@ -432,6 +500,8 @@ class TestKspliceFilterer:
+ 
+ 
+ def test_provider_schema(helpers, disable_get_requests, monkeypatch, auto_fake_fixdate_finder):
++    assert Provider.__schema__.version == "1.1.1"
++    assert schema.OSSchema().version == "1.1.0"
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+ 
+     c = Config()

@@ -1,0 +1,29 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index f4387e6..88e5471 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -39,7 +39,7 @@ def refund_invoice(ctx: Context, invoice_id: str, reason: str = "requested_by_cu
+         raise InvalidStateError("only paid invoices can be refunded")
+     if credited_total(ctx, invoice_id) > 0:
+         raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(invoice["id"], ctx)
++    payments = successful_payments(ctx, invoice["id"])
+     refunded = 0
+     for payment in payments:
+         remaining = payment["amount"] - payment["refunded_amount"]
+diff --git a/tests/test_reports.py b/tests/test_reports.py
+new file mode 100644
+index 0000000..53dead0
+--- /dev/null
++++ b/tests/test_reports.py
+@@ -0,0 +1,10 @@
++
++
++def test_revenue_between_nets_credit_notes(world):
++    from billing import reports
++
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    world.engine.refund(inv["id"])
++    assert reports.revenue_between(world.ctx, inv["paid_at"], inv["paid_at"] + 1) == {"usd": 0}

@@ -1,0 +1,6 @@
+A downstream consumer is flooded by `subscription.updated` webhooks. List every function in
+the `billing` package whose own code emits that event type (not callers further up).
+Name functions as `module.function` (methods as `module.Class.method`).
+
+Do not modify any files other than `answer.json`. When you are done, write your final answer as JSON to `answer.json` in the repository root, using exactly this shape:
+{"functions": ["<module.function>", ...]}

@@ -1,0 +1,214 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 10,
+  "duration_ms": 30638,
+  "api_duration_ms": 29642,
+  "cost_usd": 0.00756538,
+  "input_tokens": 20,
+  "output_tokens": 4590,
+  "cache_read_tokens": 169698,
+  "cache_write_tokens": 17857,
+  "models": [
+    "claude-haiku-5-5"
+  ],
+  "total_input_tokens": 187575,
+  "tool_calls": 9,
+  "tool_calls_by_kind": {
+    "read": 3,
+    "test": 2,
+    "edit": 3,
+    "answer": 1
+  },
+  "reads": 3,
+  "searches": 0,
+  "edits": 3,
+  "test_runs": 2,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "engine.py",
+    "errors.py",
+    "subscriptions.py"
+  ],
+  "files_edited": [
+    "subscriptions.py"
+  ],
+  "unique_files_edited": 1,
+  "unique_files_read": 4,
+  "rereads": 0,
+  "read_chars": 20824,
+  "search_chars": 0,
+  "tool_output_chars": 23691,
+  "relevant_files_read": 2,
+  "exploration_precision": 0.5,
+  "exploration_recall": 0.6666666666666666,
+  "steps_before_first_edit": 4,
+  "final_message": "I added `subscriptions.extend_trial(ctx, subscription_id, days)`, and the full suite passes (33 tests: the 24 existing plus 9 new).\n\n**What it does** (`billing/subscriptions.py`, after `resume`):\n- Raises `ValidationError` if `days` is not a positive integer. `bool` is rejected explicitly, since `True` is an `int` in Python.\n- Raises `InvalidStateError` if the subscription is not `trialing`.\n- Adds `days * SECONDS_PER_DAY` to both `trial_end` and `current_period_end`.\n- Emits `subscription.updated` with `previous_status`, matching the other updates in the module.\n\nBilling at the new end needs no change: the existing `run_cycle` / `_renew` path already converts a trialing subscription to `active` and invoices it once `current_period_end` passes.\n\n**Tests** (`tests/test_lifecycle.py`):\n- Both end dates move by the right amount, the status stays `trialing`, and one `subscription.updated` event is emitted.\n- The extended trial does not bill at the original end and bills once the new end passes.\n- Invalid `days` values (0, -3, 1.5, \"7\", True, None) raise `ValidationError`.\n- A non-trialing subscription raises `InvalidStateError`.\n\n**Choices I made:**\n- I did not add an engine facade method or an API endpoint, since you only asked for the module function.\n- I did not check that the subscription's trial end is still in the future before extending. Extending an already-ended trial would be rejected only by the status check, which covers the usual case because the engine flips the status at the boundary.\n\n`answer.json` is written at the repository root with a one-sentence summary. Nothing is committed.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/subscriptions.py"
+      ],
+      "read_paths": [
+        "billing/subscriptions.py"
+      ],
+      "kinds": [
+        "read",
+        "vcs"
+      ],
+      "command": "git ls-files && cat billing/subscriptions.py 2>/dev/null | head -300",
+      "output_chars": 9161,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/api.py",
+        "billing/errors.py"
+      ],
+      "read_paths": [
+        "billing/api.py",
+        "billing/errors.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "grep -rn \"trial_end\\|current_period_end\\|SECONDS_PER_DAY\" billing tests | grep -v \"^billing/subscriptions.py\" ; cat billing/api.py | head -80; cat billing/errors.py; grep -n \"def \\|^[A-Z_]* =\" billing/models.py | head -30; grep -n \"def \" billing/events.py billing/context.py",
+      "output_chars": 4856,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/engine.py",
+        "tests/test_lifecycle.py",
+        "CLAUDE.md",
+        "README.md"
+      ],
+      "read_paths": [
+        "billing/engine.py",
+        "tests/test_lifecycle.py",
+        "CLAUDE.md",
+        "README.md"
+      ],
+      "kinds": [
+        "read"
+      ],
+      "command": "cat billing/engine.py; sed -n 1,60p tests/test_lifecycle.py; cat CLAUDE.md README.md | head -60",
+      "output_chars": 6807,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [
+        "tests/conftest.py"
+      ],
+      "read_paths": [
+        "tests/conftest.py"
+      ],
+      "kinds": [
+        "read",
+        "test"
+      ],
+      "command": "cat tests/conftest.py; .venv/bin/python -m pytest -q 2>&1 | tail -3",
+      "output_chars": 1686,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Edit",
+      "paths": [
+        "billing/subscriptions.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit"
+      ],
+      "command": null,
+      "output_chars": 151,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "tests/test_lifecycle.py",
+        "tests/test_lifecycle.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read",
+        "search"
+      ],
+      "command": "cat >> tests/test_lifecycle.py <<'EOF'\n\n\ndef test_extend_trial_moves_trial_and_period_end(world):\n    cus = world.customer()\n    sub = world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)], trial_days=14)\n    trial_end = sub[\"trial_end\"]\n    subscriptions.extend_trial(world.ctx, sub[\"id\"], 7)\n    assert sub[\"trial_end\"] == trial_end + 7 * DAY\n    assert sub[\"current_period_end\"] == trial_end + 7 * DAY\n    assert sub[\"status\"] == \"trialing\"\n    assert len(events_of_type(world.ctx, \"subscription.updated\")) == 1\n\n\ndef test_extended_trial_bills_at_new_end(world):\n    cus = world.customer()\n    sub = world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)], trial_days=14)\n    subscriptions.extend_trial(world.ctx, sub[\"id\"], 7)\n    world.advance_days(14)\n    assert sub[\"status\"] == \"trialing\"\n    assert world.engine.invoices_for(cus[\"id\"]) == []\n    world.advance_days(7)\n    assert sub[\"status\"] == \"active\"\n    [inv] = world.engine.invoices_for(cus[\"id\"])\n    assert inv[\"total\"] == 1000\n\n\n@pytest.mark.parametrize(\"days\", [0, -3, 1.5, \"7\", True, None])\ndef test_extend_trial_rejects_non_positive_integer(world, days):\n    cus = world.customer()\n    sub = world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)], trial_days=14)\n    with pytest.raises(ValidationError):\n        subscriptions.extend_trial(world.ctx, sub[\"id\"], days)\n\n\ndef test_extend_trial_rejects_non_trialing(world):\n    cus = world.customer()\n    sub = world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)])\n    with pytest.raises(InvalidStateError):\n        subscriptions.extend_trial(world.ctx, sub[\"id\"], 7)\nEOF\nsed -i '1i import pytest\\n\\nfrom billing import subscriptions\\nfrom billing.errors import InvalidStateError, ValidationError\\nfrom billing.events import events_of_type' tests/test_lifecycle.py\nsed -i 's/^from billing.clock import format_date$/from billing.clock import format_date/' tests/test_lifecycle.py\nhead -12 tests/test_lifecycle.py; grep -n \"^DAY\\|DAY =\" tests/conftest.py",
+      "output_chars": 588,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Edit",
+      "paths": [
+        "tests/test_lifecycle.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit"
+      ],
+      "command": null,
+      "output_chars": 150,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "test",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "read",
+        "test"
+      ],
+      "command": ".venv/bin/python -m pytest -q 2>&1 | tail -30",
+      "output_chars": 98,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Write",
+      "paths": [
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit"
+      ],
+      "command": null,
+      "output_chars": 194,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 31.6,
+  "timed_out": false,
+  "exit_code": 0,
+  "budget_exhausted": false,
+  "max_tool_calls": null
+}

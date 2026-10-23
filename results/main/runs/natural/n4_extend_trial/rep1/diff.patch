@@ -1,0 +1,34 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index 5f3d67c..a396ce5 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -170,6 +170,29 @@ def change_items(ctx, subscription_id, items, *, prorate=True):
+     return subscription
+ 
+ 
++def extend_trial(ctx, subscription_id, days):
++    """Push back the end of a trialing subscription's trial by `days` whole days.
++
++    Both `trial_end` and `current_period_end` move later, so billing starts when the
++    extended trial ends. Emits "subscription.updated". Raises ValidationError unless
++    `days` is a positive integer and InvalidStateError unless the subscription is trialing.
++    """
++    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    if subscription["status"] != "trialing":
++        raise InvalidStateError(f"cannot extend the trial of a {subscription['status']} subscription")
++    delta = days * SECONDS_PER_DAY
++    subscription["trial_end"] += delta
++    subscription["current_period_end"] += delta
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def cancel(ctx, subscription_id, *, at_period_end=True):
+     """Cancel now, or flag the subscription to cancel when its current period ends.
+ 

@@ -1,0 +1,33 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "fields": {
+    "total_charge_attempts": {
+      "ok": true,
+      "got": 4,
+      "want": 4
+    },
+    "last_attempt_day": {
+      "ok": true,
+      "got": 7,
+      "want": 7
+    },
+    "final_subscription_status": {
+      "ok": true,
+      "got": "unpaid",
+      "want": "unpaid"
+    },
+    "final_invoice_status": {
+      "ok": true,
+      "got": "open",
+      "want": "open"
+    }
+  },
+  "answer": {
+    "total_charge_attempts": 4,
+    "last_attempt_day": 7,
+    "final_subscription_status": "unpaid",
+    "final_invoice_status": "open"
+  },
+  "answer_error": null
+}

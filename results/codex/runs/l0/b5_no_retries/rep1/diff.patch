@@ -1,0 +1,56 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index ec67e65..8b52c6c 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -48,7 +48,7 @@ def due_for_retry(ctx, now):
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "opened"
++        if invoice["status"] == "open"
+         and invoice["next_attempt_at"] is not None
+         and invoice["next_attempt_at"] <= now
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..6efd6aa 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,38 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_declined_payment_retries_and_recovers(world):
++    cus = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    assert inv["status"] == "open"
++    assert inv["attempt_count"] == 1
++    assert sub["status"] == "past_due"
++
++    world.advance_days(1)
++
++    assert inv["status"] == "paid"
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] is None
++    assert sub["status"] == "active"
++    assert len(world.gateway.charges) == 2
++
++
++def test_persistently_declined_payment_becomes_unpaid(world):
++    cus = world.customer(last4="0002")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    for day, attempt in ((1, 2), (3, 3), (7, 4)):
++        world.clock.set(inv["finalized_at"] + day * 86_400)
++        world.engine.run_cycle()
++        assert inv["attempt_count"] == attempt
++
++    assert inv["status"] == "open"
++    assert inv["next_attempt_at"] is None
++    assert sub["status"] == "unpaid"
++    assert len(world.gateway.charges) == 4

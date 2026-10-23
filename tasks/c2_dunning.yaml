@@ -1,0 +1,23 @@
+id: c2_dunning
+category: question
+stratum: type_neutral
+title: What happens when every charge fails
+read_only: true
+relevant_files: [dunning.py, payments.py, engine.py, subscriptions.py, invoices.py]
+prompt: |
+  With the engine's default dunning policy, a customer subscribes (no trial) and their card is
+  declined on every single attempt. Assume the billing cycle runs every day.
+
+  How many charge attempts are made in total for the first invoice, how many days after the
+  invoice was finalized is the last attempt, and what are the final statuses of the
+  subscription and of the invoice?
+answer_schema: |
+  {"total_charge_attempts": <int>, "last_attempt_day": <int>,
+   "final_subscription_status": "<status>", "final_invoice_status": "<status>"}
+grader:
+  type: fields
+  expected:
+    total_charge_attempts: {auto: c2_total_charge_attempts}
+    last_attempt_day: {auto: c2_last_attempt_day}
+    final_subscription_status: {auto: c2_final_subscription_status}
+    final_invoice_status: {auto: c2_final_invoice_status}

@@ -1,0 +1,34 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 80045f9..a6900fa 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -47,8 +47,8 @@ def records_in_period(
+     period_start: EpochSeconds,
+     period_end: EpochSeconds,
+ ) -> list[UsageRecord]:
+-    start = period_start
+-    end = period_end
++    start = to_millis(period_start)
++    end = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
+     ]
+diff --git a/tests/test_metered_renewal.py b/tests/test_metered_renewal.py
+new file mode 100644
+index 0000000..8da6092
+--- /dev/null
++++ b/tests/test_metered_renewal.py
+@@ -0,0 +1,13 @@
++from billing.clock import to_millis
++
++
++def test_renewal_bills_reported_metered_usage(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 1)])
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 30, to_millis(world.clock.now()) + 1000)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 12)
++    world.advance_days(31)
++    invoices = world.engine.invoices_for(cus["id"])
++    usage_lines = [line for invoice in invoices for line in invoice["lines"] if line["kind"] == "usage"]
++    assert [line["quantity"] for line in usage_lines] == [42]
++    assert usage_lines[0]["amount"] == 84

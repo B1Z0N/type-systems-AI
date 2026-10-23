@@ -1,0 +1,19 @@
+id: n1_webhook_backoff
+category: question
+stratum: type_neutral
+title: Webhook retry schedule
+read_only: true
+relevant_files: [webhooks.py]
+prompt: |
+  An endpoint always answers HTTP 500. Assume pending webhooks are delivered continuously
+  (`deliver_pending` runs every second). For one event: what are the delays, in seconds,
+  between consecutive delivery attempts, how many attempts are made in total, and what is
+  the delivery's final status?
+answer_schema: |
+  {"delays_seconds": [<int>, ...], "total_attempts": <int>, "final_status": "<status>"}
+grader:
+  type: fields
+  expected:
+    delays_seconds: {auto: n1_delays_seconds}
+    total_attempts: {auto: n1_total_attempts}
+    final_status: {auto: n1_final_status}

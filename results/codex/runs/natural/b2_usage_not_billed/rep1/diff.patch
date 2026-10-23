@@ -1,0 +1,55 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index e72b4c6..e56d88d 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -43,8 +43,8 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     """Usage records within [period_start, period_end) (epoch seconds), oldest first."""
+-    start_ms = period_start
+-    end_ms = period_end
++    start_ms = to_millis(period_start)
++    end_ms = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start_ms <= record["timestamp"] < end_ms
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..7b4b3ec 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,5 @@
+ from billing import ledger
+-from billing.clock import format_date
++from billing.clock import format_date, to_millis
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -55,3 +55,28 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_metered_usage_is_billed_in_the_period_it_was_reported(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    start = sub["current_period_start"]
++    end = sub["current_period_end"]
++
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 3)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 4, timestamp=to_millis(end) - 1)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 5, timestamp=to_millis(end))
++
++    world.clock.set(end)
++    [first_invoice] = world.engine.run_cycle()
++    [first_line] = first_invoice["lines"]
++    assert first_line["kind"] == "usage"
++    assert first_line["period_start"] == start
++    assert first_line["period_end"] == end
++    assert first_line["quantity"] == 7
++    assert first_invoice["total"] == 14
++
++    world.clock.set(sub["current_period_end"])
++    [second_invoice] = world.engine.run_cycle()
++    assert second_invoice["lines"][0]["quantity"] == 5
++    assert second_invoice["total"] == 10

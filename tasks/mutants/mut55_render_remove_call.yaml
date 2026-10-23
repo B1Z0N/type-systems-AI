@@ -1,0 +1,60 @@
+id: mut55_render_remove_call
+category: bugfix
+stratum: type_neutral
+origin: mutant
+title: Random remove call mutant in render.py
+read_only: false
+bug_kind: remove_call
+checker_catches_at: none
+relevant_files:
+- render.py
+mutations:
+- file: render.py
+  find: |2
+            out.append(_row(label + (" incl." if inclusive else ""), format_amount(invoice["tax_total"], currency)))
+  replace: |2
+            pass
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+  from billing.render import render_invoice
+
+
+  def test_render_invoice(world):
+      from billing import tax
+
+      tax.set_tax_rate(world.ctx, "US-CA", 825, "CA")
+      cus = world.customer(region="US-CA")
+      world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+      [inv] = world.engine.invoices_for(cus["id"])
+      text = render_invoice(world.ctx, inv)
+      assert "Invoice INV-00001" in text
+      assert "Tax (8.25%)" in text
+      assert "$10.82" in text
+  ```
+
+  It fails with:
+
+  ```
+  AssertionError: assert 'Tax (8.25%)' in 'Invoice INV-00001\nBilled to: Ada <a@example.com>\nPeriod: 2026-01-15 - 2026-02-15\nDue: 2026-01-22\n----------------...                                             -$10.82\nAmount due                                                 $0.00'
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: render.py
+  function: render_invoice
+grader:
+  type: tests
+  target_tests:
+  - base/test_webhooks_reports_api.py::test_render_invoice
+mutant:
+  site: render.py:45
+  operator: remove_call
+  index: 7
+  hidden_failing: 1
+  mypy_errors_l3: 0
+  mypy_errors_l2: 0

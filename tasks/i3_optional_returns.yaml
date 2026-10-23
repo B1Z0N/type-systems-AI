@@ -1,0 +1,17 @@
+id: i3_optional_returns
+category: list
+stratum: type_relevant
+title: Functions that may return None
+read_only: true
+relevant_files: [store.py, catalog.py, customers.py, payments.py, tax.py, engine.py, api.py]
+prompt: |
+  We're auditing for None-handling bugs. List every function or method in the `billing`
+  package (including private helpers) that can return `None` to its caller as a normal
+  result, not counting functions that never return a value at all.
+  Name functions as `module.function` (methods as `module.Class.method`).
+answer_schema: |
+  {"functions": ["<module.function>", ...]}
+grader:
+  type: sets
+  expected:
+    functions: {auto: optional_returns}

@@ -1,0 +1,22 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index 8423316..6d8b206 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -2,7 +2,7 @@
+ 
+ from .context import Context
+ from .customers import default_payment_method, is_expired
+-from .dunning import record_failure
++from .dunning import record_failure, recover
+ from .errors import InvalidStateError
+ from .invoices import mark_paid
+ from .models import Cents, InvoiceId, Payment
+@@ -43,7 +43,7 @@ def collect(ctx: Context, invoice_id: InvoiceId) -> Payment | None:
+     ctx.store.payments[payment["id"]] = payment
+     if result["ok"]:
+         mark_paid(ctx, invoice, payment["amount"])
+-        pass
++        recover(ctx, invoice)
+     else:
+         record_failure(ctx, invoice, result["failure_code"] or "unknown")
+     return payment

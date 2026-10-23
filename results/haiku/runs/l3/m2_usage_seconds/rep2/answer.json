@@ -1,0 +1,1 @@
+{"summary": "Usage records now store their timestamp in epoch seconds (with the sub-second remainder kept in a separate field), while the report_usage, BillingEngine.report_usage and POST /usage interfaces and billing results stay unchanged."}

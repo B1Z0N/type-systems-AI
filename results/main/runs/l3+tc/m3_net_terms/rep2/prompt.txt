@@ -1,0 +1,9 @@
+Invoices are currently always due 7 days after finalization. Make this configurable per
+customer: add a `net_terms_days` setting (integer, default 7) that can be passed to
+`customers.create_customer(..., net_terms_days=...)`, changed with
+`customers.update_customer(..., net_terms_days=...)`, and given in the `POST /customers`
+API body as `net_terms_days`. A negative value must raise `ValidationError` (HTTP 400 from
+the API). When an invoice is finalized, its `due_at` must use the customer's current term.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

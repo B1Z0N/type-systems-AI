@@ -1,0 +1,85 @@
+edits:
+  - file: refunds.py
+    find: |
+      def refund_invoice(ctx: Context, invoice_id: InvoiceId, reason: str = "requested_by_customer") -> CreditNote:
+          """Refund everything that was paid on an invoice back to the original payment method."""
+          invoice = ctx.store.require_invoice(invoice_id)
+          if invoice["status"] != "paid":
+              raise InvalidStateError("only paid invoices can be refunded")
+          if credited_total(ctx, invoice_id) > 0:
+              raise InvalidStateError("invoice has already been refunded or credited")
+          payments = successful_payments(ctx, invoice["id"])
+          refunded = Cents(0)
+          for payment in payments:
+              remaining = Cents(payment["amount"] - payment["refunded_amount"])
+              if remaining <= 0 or payment["gateway_ref"] is None:
+                  continue
+              result = ctx.gateway.refund(payment["gateway_ref"], remaining)
+              if not result["ok"]:
+                  raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+              payment["refunded_amount"] = Cents(payment["refunded_amount"] + remaining)
+              payment["status"] = "refunded"
+              refunded = Cents(refunded + remaining)
+              emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+          if invoice["credit_applied"] > 0:
+              add_entry(ctx, invoice["customer_id"], invoice["credit_applied"], "refund", invoice["id"])
+          if refunded == 0 and invoice["credit_applied"] == 0:
+              raise InvalidStateError("invoice has no successful payment to refund")
+          return _credit_note(ctx, invoice_id, Cents(refunded + invoice["credit_applied"]), reason, True)
+    replace: |
+      def refund_invoice(
+          ctx: Context, invoice_id: InvoiceId, reason: str = "requested_by_customer", amount: Cents | None = None
+      ) -> CreditNote:
+          """Refund money paid on an invoice back to the original payment method."""
+          invoice = ctx.store.require_invoice(invoice_id)
+          if invoice["status"] != "paid":
+              raise InvalidStateError("only paid invoices can be refunded")
+          payments = sorted(successful_payments(ctx, invoice["id"]), key=lambda p: (p["created_at"], p["id"]))
+          refundable = Cents(sum(p["amount"] - p["refunded_amount"] for p in payments if p["gateway_ref"] is not None))
+          restore = invoice["credit_applied"] if amount is None else Cents(0)
+          if amount is not None:
+              if amount <= 0:
+                  raise ValidationError("refund amount must be positive")
+              if amount > refundable:
+                  raise ValidationError(f"cannot refund more than {refundable}")
+          wanted = refundable if amount is None else amount
+          if wanted == 0 and restore == 0:
+              raise InvalidStateError("invoice has no successful payment to refund")
+          refunded = Cents(0)
+          for payment in payments:
+              remaining = Cents(payment["amount"] - payment["refunded_amount"])
+              take = Cents(min(remaining, wanted - refunded))
+              if take <= 0 or payment["gateway_ref"] is None:
+                  continue
+              result = ctx.gateway.refund(payment["gateway_ref"], take)
+              if not result["ok"]:
+                  raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+              payment["refunded_amount"] = Cents(payment["refunded_amount"] + take)
+              payment["status"] = "refunded" if payment["refunded_amount"] == payment["amount"] else "partially_refunded"
+              refunded = Cents(refunded + take)
+              emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+          if restore > 0:
+              add_entry(ctx, invoice["customer_id"], restore, "refund", invoice["id"])
+              invoice["credit_applied"] = Cents(0)
+          return _credit_note(ctx, invoice_id, Cents(refunded + restore), reason, True)
+  - file: engine.py
+    find: |
+          def refund(self, invoice_id: InvoiceId, reason: str = "requested_by_customer") -> CreditNote:
+              return refunds.refund_invoice(self.ctx, invoice_id, reason)
+    replace: |
+          def refund(
+              self, invoice_id: InvoiceId, reason: str = "requested_by_customer", amount: Cents | None = None
+          ) -> CreditNote:
+              return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)
+  - file: engine.py
+    find: "    Clock,\n"
+    replace: "    Cents,\n    Clock,\n"
+  - file: api.py
+    find: '    note = engine.refund(InvoiceId(params[0]), _optional_str(body, "reason") or "requested_by_customer")'
+    replace: |2
+          raw_amount = body.get("amount")
+          amount = Cents(_int(body, "amount")) if raw_amount is not None else None
+          note = engine.refund(InvoiceId(params[0]), _optional_str(body, "reason") or "requested_by_customer", amount)
+  - file: api.py
+    find: "    CurrencyCode,\n"
+    replace: "    Cents,\n    CurrencyCode,\n"

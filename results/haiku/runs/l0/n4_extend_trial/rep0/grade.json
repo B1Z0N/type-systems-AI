@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 3,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added subscriptions.extend_trial(ctx, subscription_id, days), which moves a trialing subscription's trial_end and current_period_end later by whole days, emits subscription.updated, raises ValidationError for non-positive-integer days and InvalidStateError for non-trialing subscriptions, and is covered by four new tests in tests/test_lifecycle.py (28 tests passing)."
+  },
+  "answer_error": null
+}

@@ -1,0 +1,19 @@
+edits:
+  - file: models.py
+    find: "    quantity: int\n    timestamp: EpochMillis\n"
+    replace: "    quantity: int\n    timestamp: EpochSeconds\n"
+  - file: usage.py
+    find: '"timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),'
+    replace: '"timestamp": to_seconds(timestamp) if timestamp is not None else ctx.clock.now(),'
+  - file: usage.py
+    find: "    start = to_millis(period_start)\n    end = to_millis(period_end)\n"
+    replace: "    start = period_start\n    end = period_end\n"
+  - file: usage.py
+    find: "from .clock import to_millis\n"
+    replace: "from .clock import to_seconds\n"
+  - file: api.py
+    find: 'return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": record["timestamp"]}'
+    replace: 'return 201, {"id": record["id"], "quantity": record["quantity"], "timestamp": to_millis(record["timestamp"])}'
+  - file: api.py
+    find: "from .engine import BillingEngine\n"
+    replace: "from .clock import to_millis\nfrom .engine import BillingEngine\n"

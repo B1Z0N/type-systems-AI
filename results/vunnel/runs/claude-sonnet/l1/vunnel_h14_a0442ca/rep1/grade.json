@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "The oracle provider now emits per-architecture FixedIn entries (with an Arch key) when the fix differs by arch and arch-less entries otherwise, and advertises the new OS schema 1.1.1 with an optional FixedIn.Arch."
+  },
+  "answer_error": null
+}

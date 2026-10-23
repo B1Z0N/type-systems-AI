@@ -1,0 +1,44 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index 28bdc05..eaf3a3d 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -48,7 +48,7 @@ def refund_invoice(ctx, invoice_id, reason="requested_by_customer"):
+         if not result["ok"]:
+             raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+         payment["refunded_amount"] = payment["refunded_amount"] + remaining
+-        payment["ok"] = "refunded"
++        payment["status"] = "refunded"
+         refunded = refunded + remaining
+         emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+     if invoice["credit_applied"] > 0:
+diff --git a/tests/test_credit_notes.py b/tests/test_credit_notes.py
+index 26befa7..fe19ba1 100644
+--- a/tests/test_credit_notes.py
++++ b/tests/test_credit_notes.py
+@@ -1,6 +1,7 @@
+ import pytest
+ 
+ from billing import ledger, refunds
++from billing.errors import InvalidStateError
+ 
+ 
+ def test_credit_note_limits(world):
+@@ -11,3 +12,18 @@ def test_credit_note_limits(world):
+     assert ledger.balance(world.ctx, cus["id"]) == 400
+     with pytest.raises(Exception):
+         refunds.credit_invoice(world.ctx, inv["id"], 700, "too much")
++
++
++def test_full_refund(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    note = world.engine.refund(inv["id"])
++
++    assert note["amount"] == 1000
++    assert world.gateway.refunds == [("ch_000001", 1000)]
++    [payment] = world.ctx.store.payments_for_invoice(inv["id"])
++    assert payment["status"] == "refunded"
++    with pytest.raises(InvalidStateError):
++        world.engine.refund(inv["id"])

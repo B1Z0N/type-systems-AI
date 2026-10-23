@@ -1,0 +1,108 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 57987e0..759c4df 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -4,9 +4,16 @@ from .clock import to_millis
+ from .errors import ValidationError
+ 
+ 
++def _public(record):
++    """Client view of a stored record: timestamp in epoch milliseconds, as clients send and expect it."""
++    view = {key: value for key, value in record.items() if key not in ("timestamp", "subsecond_ms")}
++    view["timestamp"] = record["timestamp"] * 1000 + record["subsecond_ms"]
++    return view
++
++
+ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idempotency_key=None):
+     if idempotency_key is not None and idempotency_key in ctx.store.usage_keys:
+-        return ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]]
++        return _public(ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]])
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] in ("canceled", "paused"):
+         raise ValidationError(f"cannot report usage on a {subscription['status']} subscription")
+@@ -17,27 +24,30 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    timestamp_ms = timestamp if timestamp is not None else to_millis(ctx.clock.now())
++    seconds, subsecond_ms = divmod(timestamp_ms, 1000)
+     record = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": seconds,
++        "subsecond_ms": subsecond_ms,
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+     if idempotency_key is not None:
+         ctx.store.usage_keys[idempotency_key] = record["id"]
+-    return record
++    return _public(record)
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+-    start = to_millis(period_start)
+-    end = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp"], record["subsecond_ms"], record["id"]))
+ 
+ 
+ def aggregate_usage(ctx, subscription_id, price_id, period_start, period_end):
+diff --git a/tests/test_usage_units.py b/tests/test_usage_units.py
+new file mode 100644
+index 0000000..4ca4ce4
+--- /dev/null
++++ b/tests/test_usage_units.py
+@@ -0,0 +1,43 @@
++from billing import usage
++from billing.clock import epoch
++
++
++def _metered_subscription(world):
++    cus = world.customer()
++    return world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++
++
++def test_usage_is_stored_in_seconds_and_reported_in_millis(world):
++    sub = _metered_subscription(world)
++    rec = world.engine.report_usage(sub["id"], world.api_calls["id"], 3, 1_700_000_123_456)
++    assert rec["timestamp"] == 1_700_000_123_456
++    stored = world.ctx.store.usage_records[rec["id"]]
++    assert stored["timestamp"] == 1_700_000_123
++    assert stored["subsecond_ms"] == 456
++
++
++def test_default_timestamp_is_now_in_millis(world):
++    sub = _metered_subscription(world)
++    rec = world.engine.report_usage(sub["id"], world.api_calls["id"], 1)
++    assert rec["timestamp"] == world.clock.now() * 1000
++
++
++def test_last_aggregation_orders_by_sub_second_within_same_second(world):
++    sub = _metered_subscription(world)
++    price = world.api_calls
++    world.ctx.store.prices[price["id"]]["usage_aggregation"] = "last"
++    base = epoch(2026, 1, 20) * 1000
++    world.engine.report_usage(sub["id"], price["id"], 7, base + 900)
++    world.engine.report_usage(sub["id"], price["id"], 5, base + 100)
++    start, end = epoch(2026, 1, 1), epoch(2026, 2, 1)
++    assert usage.aggregate_usage(world.ctx, sub["id"], price["id"], start, end) == 7
++
++
++def test_period_boundaries_are_inclusive_start_exclusive_end(world):
++    sub = _metered_subscription(world)
++    price = world.api_calls
++    start = epoch(2026, 1, 20)
++    world.engine.report_usage(sub["id"], price["id"], 1, start * 1000 - 1)
++    world.engine.report_usage(sub["id"], price["id"], 2, start * 1000 + 999)
++    world.engine.report_usage(sub["id"], price["id"], 4, (start + 1) * 1000)
++    assert usage.aggregate_usage(world.ctx, sub["id"], price["id"], start, start + 1) == 2

@@ -1,0 +1,1 @@
+{"summary": "Wolfi and Chainguard secdb parsers now use the distro security page as the reference link for vulnerability IDs without CVE or GHSA prefixes."}

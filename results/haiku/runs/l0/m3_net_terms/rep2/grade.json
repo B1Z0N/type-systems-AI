@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added a per-customer net_terms_days setting (default 7, negative values rejected with ValidationError/HTTP 400) settable on create and update, and invoice finalization now uses the customer's current term for due_at."
+  },
+  "answer_error": null
+}

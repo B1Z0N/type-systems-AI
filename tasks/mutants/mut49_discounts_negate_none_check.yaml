@@ -1,0 +1,55 @@
+id: mut49_discounts_negate_none_check
+category: bugfix
+stratum: type_relevant
+origin: mutant
+title: Random negate none check mutant in discounts.py
+read_only: false
+bug_kind: negate_none_check
+checker_catches_at: l2
+relevant_files:
+- discounts.py
+mutations:
+- file: discounts.py
+  find: |2
+        return price_id is not None and plan_of.get(price_id) in plans
+  replace: |2
+        return price_id is None and plan_of.get(price_id) in plans
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+  from billing import discounts
+
+
+  def test_plan_restricted_coupon(world):
+      cus = world.customer()
+      coupon = discounts.create_coupon(world.ctx, "team", percent_off=5000, applies_to_plans=[world.team["id"]])
+      world.engine.subscribe(cus["id"], [(world.monthly["id"], 1), (world.team_monthly["id"], 1)], coupon_id=coupon["id"])
+      [inv] = world.engine.invoices_for(cus["id"])
+      assert [line["discount_amount"] for line in inv["lines"]] == [0, 1500]
+  ```
+
+  It fails with:
+
+  ```
+  assert [0, 0] == [0, 1500]
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: discounts.py
+  function: _eligible
+grader:
+  type: tests
+  target_tests:
+  - base/test_discounts_tax.py::test_plan_restricted_coupon
+mutant:
+  site: discounts.py:104
+  operator: negate_none_check
+  index: 11
+  hidden_failing: 1
+  mypy_errors_l3: 1
+  mypy_errors_l2: 1

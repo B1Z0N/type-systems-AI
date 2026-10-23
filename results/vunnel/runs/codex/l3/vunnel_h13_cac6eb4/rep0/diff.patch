@@ -1,0 +1,140 @@
+diff --git a/src/vunnel/providers/__init__.py b/src/vunnel/providers/__init__.py
+index ac2fb91..e65e952 100644
+--- a/src/vunnel/providers/__init__.py
++++ b/src/vunnel/providers/__init__.py
+@@ -1,6 +1,8 @@
+ from __future__ import annotations
+ 
+ import logging
++import os
++from enum import StrEnum
+ from importlib.metadata import entry_points
+ from typing import TYPE_CHECKING, Any
+ 
+@@ -39,6 +41,21 @@ if TYPE_CHECKING:
+ 
+ from vunnel.provider import get_provider_tags
+ 
++
++class PluginOverrideMode(StrEnum):
++    FAIL = "fail"
++    REPLACE = "replace"
++    IGNORE = "ignore"
++
++    @classmethod
++    def from_env(cls) -> PluginOverrideMode:
++        value = os.getenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "").strip().lower()
++        try:
++            return cls(value)
++        except ValueError:
++            return cls.FAIL
++
++
+ _providers: dict[str, type[provider.Provider]] = {
+     # vulnerability providers
+     alma.Provider.name(): alma.Provider,
+@@ -84,9 +101,14 @@ def versions() -> dict[str, int]:
+     return {n: p.version() for (n, p) in _providers.items()}
+ 
+ 
+-def register(name: str, cls: type[provider.Provider]) -> None:
++def register(name: str, cls: type[provider.Provider], mode: PluginOverrideMode | None = None) -> None:
++    if mode is None:
++        mode = PluginOverrideMode.from_env()
+     if name in _providers and _providers[name] != cls:
+-        raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode == PluginOverrideMode.FAIL:
++            raise KeyError(f"provider {name!r} is already registered to another provider class: {_providers[name]!r}")
++        if mode == PluginOverrideMode.IGNORE:
++            return
+     _providers[name] = cls
+ 
+ 
+diff --git a/tests/unit/test_provider_registration.py b/tests/unit/test_provider_registration.py
+new file mode 100644
+index 0000000..d32b3b9
+--- /dev/null
++++ b/tests/unit/test_provider_registration.py
+@@ -0,0 +1,82 @@
++import pytest
++
++from vunnel import providers
++
++
++@pytest.mark.parametrize(
++    ("value", "expected"),
++    [
++        (None, providers.PluginOverrideMode.FAIL),
++        ("", providers.PluginOverrideMode.FAIL),
++        ("unknown", providers.PluginOverrideMode.FAIL),
++        ("FaIl", providers.PluginOverrideMode.FAIL),
++        ("REPLACE", providers.PluginOverrideMode.REPLACE),
++        ("Ignore", providers.PluginOverrideMode.IGNORE),
++    ],
++)
++def test_plugin_override_mode_from_env(monkeypatch, value, expected):
++    if value is None:
++        monkeypatch.delenv("VUNNEL_PLUGIN_OVERRIDE_MODE", raising=False)
++    else:
++        monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", value)
++
++    assert providers.PluginOverrideMode.from_env() is expected
++
++
++@pytest.mark.parametrize(
++    ("mode", "expected"),
++    [
++        (providers.PluginOverrideMode.REPLACE, providers.alpine.Provider),
++        (providers.PluginOverrideMode.IGNORE, providers.alma.Provider),
++    ],
++)
++def test_register_collision_modes(monkeypatch, mode, expected):
++    monkeypatch.setitem(providers._providers, "alma", providers.alma.Provider)
++
++    providers.register("alma", providers.alpine.Provider, mode=mode)
++
++    assert providers.provider_class("alma") is expected
++
++
++def test_register_collision_fails_by_default(monkeypatch):
++    monkeypatch.setitem(providers._providers, "alma", providers.alma.Provider)
++    monkeypatch.delenv("VUNNEL_PLUGIN_OVERRIDE_MODE", raising=False)
++
++    with pytest.raises(KeyError, match="already registered"):
++        providers.register("alma", providers.alpine.Provider)
++
++    assert providers.provider_class("alma") is providers.alma.Provider
++
++
++def test_explicit_mode_overrides_environment(monkeypatch):
++    monkeypatch.setitem(providers._providers, "alma", providers.alma.Provider)
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "replace")
++
++    with pytest.raises(KeyError, match="already registered"):
++        providers.register("alma", providers.alpine.Provider, mode=providers.PluginOverrideMode.FAIL)
++
++    assert providers.provider_class("alma") is providers.alma.Provider
++
++
++def test_register_resolves_environment_on_each_call(monkeypatch):
++    monkeypatch.setitem(providers._providers, "alma", providers.alma.Provider)
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "ignore")
++    providers.register("alma", providers.alpine.Provider)
++    assert providers.provider_class("alma") is providers.alma.Provider
++
++    monkeypatch.setenv("VUNNEL_PLUGIN_OVERRIDE_MODE", "replace")
++    providers.register("alma", providers.alpine.Provider)
++    assert providers.provider_class("alma") is providers.alpine.Provider
++
++
++@pytest.mark.parametrize("mode", list(providers.PluginOverrideMode))
++def test_register_new_name_and_same_class(monkeypatch, mode):
++    name = "registration-test-provider"
++    monkeypatch.setitem(providers._providers, name, providers.alma.Provider)
++
++    providers.register(name, providers.alma.Provider, mode=mode)
++    assert providers.provider_class(name) is providers.alma.Provider
++
++    monkeypatch.delitem(providers._providers, name)
++    providers.register(name, providers.alpine.Provider, mode=mode)
++    assert providers.provider_class(name) is providers.alpine.Provider

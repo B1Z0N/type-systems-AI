@@ -1,0 +1,1 @@
+{"summary": "Usage timestamps are stored in epoch seconds while reporting and API responses retain milliseconds and billing behavior is unchanged."}

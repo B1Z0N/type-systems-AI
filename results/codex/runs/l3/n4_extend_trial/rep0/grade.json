@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 3,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added trial extensions with input and state validation, update events, and billing at the extended trial end."
+  },
+  "answer_error": null
+}

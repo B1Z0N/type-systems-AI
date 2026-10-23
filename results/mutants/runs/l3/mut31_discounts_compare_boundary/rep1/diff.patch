@@ -1,0 +1,13 @@
+diff --git a/billing/discounts.py b/billing/discounts.py
+index ed8ec7b..4d48857 100644
+--- a/billing/discounts.py
++++ b/billing/discounts.py
+@@ -67,7 +67,7 @@ def create_coupon(
+ def is_redeemable(coupon: Coupon, at: EpochSeconds) -> bool:
+     if coupon["valid_until"] is not None and at >= coupon["valid_until"]:
+         return False
+-    if coupon["max_redemptions"] is not None and coupon["times_redeemed"] > coupon["max_redemptions"]:
++    if coupon["max_redemptions"] is not None and coupon["times_redeemed"] >= coupon["max_redemptions"]:
+         return False
+     return True
+ 

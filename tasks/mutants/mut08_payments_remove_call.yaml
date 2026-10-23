@@ -1,0 +1,60 @@
+id: mut08_payments_remove_call
+category: bugfix
+stratum: type_neutral
+origin: mutant
+title: Random remove call mutant in payments.py
+read_only: false
+bug_kind: remove_call
+checker_catches_at: none
+relevant_files:
+- payments.py
+mutations:
+- file: payments.py
+  find: |2
+            record_failure(ctx, invoice, result["failure_code"] or "unknown")
+  replace: |2
+            pass
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+
+
+  def test_recovery_after_retry_succeeds(world):
+      cus = world.customer()
+      world.gateway.fail_next.append("card_declined")
+      sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+      assert sub["status"] == "past_due"
+      world.advance_days(1)
+      assert sub["status"] == "active"
+      [inv] = world.engine.invoices_for(cus["id"])
+      assert inv["status"] == "paid"
+  ```
+
+  It fails with:
+
+  ```
+  AssertionError: assert 'active' == 'past_due'
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: payments.py
+  function: collect
+grader:
+  type: tests
+  target_tests:
+  - base/test_dunning_refunds.py::test_cancel_policy_marks_uncollectible
+  - base/test_dunning_refunds.py::test_failed_payment_goes_past_due_then_unpaid
+  - base/test_dunning_refunds.py::test_recovery_after_retry_succeeds
+  - base/test_dunning_refunds.py::test_retries_exhausted_after_cancel_marks_uncollectible
+mutant:
+  site: payments.py:48
+  operator: remove_call
+  index: 5
+  hidden_failing: 4
+  mypy_errors_l3: 0
+  mypy_errors_l2: 0

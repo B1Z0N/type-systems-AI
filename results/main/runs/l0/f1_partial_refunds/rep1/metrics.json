@@ -1,0 +1,187 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 8,
+  "duration_ms": 36483,
+  "api_duration_ms": 35728,
+  "cost_usd": 0.11066659999999999,
+  "input_tokens": 16,
+  "output_tokens": 4679,
+  "cache_read_tokens": 98686,
+  "cache_write_tokens": 13494,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 112196,
+  "tool_calls": 7,
+  "tool_calls_by_kind": {
+    "read": 5,
+    "edit": 1,
+    "answer": 1
+  },
+  "reads": 5,
+  "searches": 0,
+  "edits": 1,
+  "test_runs": 0,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "gateway.py",
+    "ledger.py",
+    "payments.py",
+    "refunds.py"
+  ],
+  "files_edited": [],
+  "unique_files_edited": 0,
+  "unique_files_read": 5,
+  "rereads": 1,
+  "read_chars": 13767,
+  "search_chars": 0,
+  "tool_output_chars": 13955,
+  "relevant_files_read": 4,
+  "exploration_precision": 0.8,
+  "exploration_recall": 0.6666666666666666,
+  "steps_before_first_edit": 5,
+  "final_message": "Partial refunds are in, and the full test suite passes (25 tests, including one new partial-refund test). I haven't committed anything.\n\n- **Refund logic (`billing/refunds.py`):**\n  - An optional `amount` is refunded through the gateway from successful payments, oldest first.\n  - A partly refunded payment gets `partially_refunded`, and a fully refunded one gets `refunded`.\n  - Each refund creates one credit note with `refunded=True` and the refunded amount.\n  - An amount of 0 or less, or more than what remains, raises `ValidationError`.\n  - With no amount, it refunds whatever remains and returns any applied account credit once. If nothing is left, it raises `InvalidStateError`.\n- **Engine and API:** `BillingEngine.refund` and `POST /invoices/{id}/refund` both accept the optional `amount`.\n- **Tests:** the new test is in `tests/test_credit_notes.py`.\n- **`answer.json`:** written in the repository root with the one-sentence summary.\n\nI made three choices the spec didn't settle:\n- **Non-refund credit notes:** the old \"any credit note blocks a refund\" check now applies only to credit notes that aren't refunds. An invoice that has had account credit issued against it via `credit_invoice` still can't be refunded, which avoids returning the same money twice.\n- **Non-integer amounts:** an `amount` that isn't an integer, such as a string, raises `ValidationError`.\n- **Check order:** an amount of 0 or less raises `ValidationError` even when nothing remains to refund. The \"nothing left\" `InvalidStateError` is checked after that.",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "src/*/refunds.py"
+      ],
+      "read_paths": [
+        "src/*/refunds.py"
+      ],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && cat src/*/refunds.py 2>/dev/null || find . -name refunds.py -not -path './.venv/*'",
+      "output_chars": 851,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/refunds.py",
+        "billing/gateway.py"
+      ],
+      "read_paths": [
+        "billing/refunds.py",
+        "billing/gateway.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "cat billing/refunds.py billing/gateway.py; grep -n -i \"refund\" -r billing --include=*.py | grep -v \"^billing/refunds.py\"; grep -n \"class Payment\" -A25 billing/models.py",
+      "output_chars": 4902,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/payments.py"
+      ],
+      "read_paths": [
+        "billing/payments.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "grep -n -i \"refund\" billing/*.py | grep -v \"^billing/refunds.py\"; cat billing/payments.py | head -60; grep -n \"credit_notes_for\" -A5 billing/store.py",
+      "output_chars": 3435,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/ledger.py",
+        "billing/api.py"
+      ],
+      "read_paths": [
+        "billing/ledger.py",
+        "billing/api.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "cat billing/ledger.py; grep -n \"payments_for_invoice\" -A4 billing/store.py; sed -n 70,100p billing/api.py; grep -n \"def _optional\" -A8 billing/api.py; grep -n -i refund tests/*.py | head -30",
+      "output_chars": 3362,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/api.py",
+        "tests/test_credit_notes.py"
+      ],
+      "read_paths": [
+        "billing/api.py",
+        "tests/test_credit_notes.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "sed -n 1,16p billing/api.py; grep -n \"def _int\" -A8 billing/api.py; cat tests/test_credit_notes.py; grep -n \"refund\" -B3 -A10 tests/test_lifecycle.py | head -60",
+      "output_chars": 1217,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "edit",
+      "tool": "Bash",
+      "paths": [
+        "0",
+        "refundable",
+        "tests/test_credit_notes.py"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "edit",
+        "other",
+        "read",
+        "run"
+      ],
+      "command": "python3 - <<'EOF'\nimport re\np='billing/refunds.py'\ns=open(p).read()\na=s.index('def refund_invoice')\nb=s.index('def credit_invoice')\nnew='''def _refundable(payment):\n    if payment[\"gateway_ref\"] is None:\n        return 0\n    return max(payment[\"amount\"] - payment[\"refunded_amount\"], 0)\n\n\ndef _credit_returned(ctx, invoice_id):\n    return any(\n        entry[\"reason\"] == \"refund\" and entry[\"invoice_id\"] == invoice_id\n        for entry in ctx.store.ledger\n    )\n\n\ndef refund_invoice(ctx, invoice_id, reason=\"requested_by_customer\", amount=None):\n    \"\"\"Refund paid money on an invoice back to the original payment method.\n\n    With ``amount`` (minor units) only that much is refunded, oldest payments first.\n    Without it, everything still refundable is refunded and applied account credit is returned.\n    \"\"\"\n    invoice = ctx.store.require_invoice(invoice_id)\n    if invoice[\"status\"] != \"paid\":\n        raise InvalidStateError(\"only paid invoices can be refunded\")\n    if any(not note[\"refunded\"] for note in ctx.store.credit_notes_for(invoice_id)):\n        raise InvalidStateError(\"invoice has already been credited\")\n    if amount is not None and (isinstance(amount, bool) or not isinstance(amount, int)):\n        raise ValidationError(\"refund amount must be an integer\")\n    if amount is not None and amount <= 0:\n        raise ValidationError(\"refund amount must be positive\")\n    payments = sorted(successful_payments(ctx, invoice[\"id\"]), key=lambda p: p[\"created_at\"])\n    refundable = sum(_refundable(payment) for payment in payments)\n    return_credit = amount is None and invoice[\"credit_applied\"] > 0 and not _credit_returned(ctx, invoice_id)\n    if refundable == 0 and not return_credit:\n        raise InvalidStateError(\"invoice has nothing left to refund\")\n    if amount is not None and amount > refundable:\n        raise ValidationError(f\"cannot refund more than {refundable} on this invoice\")\n    to_refund = refundable if amount is None else amount\n    refunded = 0\n    for payment in payments:\n        if to_refund - refunded <= 0:\n            break\n        chunk = min(_refundable(payment), to_refund - refunded)\n        if chunk <= 0:\n            continue\n        result = ctx.gateway.refund(payment[\"gateway_ref\"], chunk)\n        if not result[\"ok\"]:\n            raise InvalidStateError(f\"gateway refused refund for payment {payment['id']}\")\n        payment[\"refunded_amount\"] = payment[\"refunded_amount\"] + chunk\n        full = payment[\"refunded_amount\"] >= payment[\"amount\"]\n        payment[\"status\"] = \"refunded\" if full else \"partially_refunded\"\n        refunded = refunded + chunk\n        emit(ctx, \"payment.refunded\", {\"payment\": payment_json(payment)})\n    credit = 0\n    if return_credit:\n        credit = invoice[\"credit_applied\"]\n        add_entry(ctx, invoice[\"customer_id\"], credit, \"refund\", invoice[\"id\"])\n    return _credit_note(ctx, invoice_id, refunded + credit, reason, True)\n\n\n'''\nopen(p,'w').write(s[:a]+new+s[b:])\n\np='billing/engine.py'\ns=open(p).read()\ns=s.replace('''    def refund(self, invoice_id, reason=\"requested_by_customer\"):\n        return refunds.refund_invoice(self.ctx, invoice_id, reason)''','''    def refund(self, invoice_id, reason=\"requested_by_customer\", amount=None):\n        return refunds.refund_invoice(self.ctx, invoice_id, reason, amount)''')\nopen(p,'w').write(s)\n\np='billing/api.py'\ns=open(p).read()\ns=s.replace('''    note = engine.refund(params[0], _optional_str(body, \"reason\") or \"requested_by_customer\")''','''    amount = _int(body, \"amount\") if body.get(\"amount\") is not None else None\n    note = engine.refund(params[0], _optional_str(body, \"reason\") or \"requested_by_customer\", amount)''')\nopen(p,'w').write(s)\nEOF\ncat >> tests/test_credit_notes.py <<'EOF'\n\n\ndef test_partial_refunds(world):\n    from billing.errors import InvalidStateError, ValidationError\n\n    cus = world.customer()\n    world.engine.subscribe(cus[\"id\"], [(world.monthly[\"id\"], 1)])\n    [inv] = world.engine.invoices_for(cus[\"id\"])\n    total = sum(p[\"amount\"] for p in world.ctx.store.payments.values() if p[\"invoice_id\"] == inv[\"id\"])\n    note = world.engine.refund(inv[\"id\"], amount=100)\n    assert note[\"amount\"] == 100 and note[\"refunded\"] is True\n    [pay] = world.ctx.store.payments_for_invoice(inv[\"id\"])\n    assert pay[\"status\"] == \"partially_refunded\"\n    with pytest.raises(ValidationError):\n        world.engine.refund(inv[\"id\"], amount=0)\n    with pytest.raises(ValidationError):\n        world.engine.refund(inv[\"id\"], amount=total)\n    assert world.engine.refund(inv[\"id\"])[\"amount\"] == total - 100\n    assert pay[\"status\"] == \"refunded\"\n    with pytest.raises(InvalidStateError):\n        world.engine.refund(inv[\"id\"])\nEOF\n.venv/bin/python -m pytest -q 2>&1 | tail -15",
+      "output_chars": 98,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Bash",
+      "paths": [
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "vcs"
+      ],
+      "command": "echo '{\"summary\": \"Added optional partial-refund amounts to refund_invoice, BillingEngine.refund and the refund API, refunding oldest payments first with partially_refunded status and one credit note per refund.\"}' > answer.json && git status --short",
+      "output_chars": 90,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 37.4,
+  "timed_out": false,
+  "exit_code": 0
+}

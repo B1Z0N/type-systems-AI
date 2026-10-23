@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added per-customer net_terms_days (default 7, validated non-negative) to create/update/API and used it for due_at on finalize."
+  },
+  "answer_error": null
+}

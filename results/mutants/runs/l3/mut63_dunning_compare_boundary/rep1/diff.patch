@@ -1,0 +1,13 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index f3c440e..704adec 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -25,7 +25,7 @@ def record_failure(ctx: Context, invoice: Invoice, failure_code: str) -> None:
+     subscription = (
+         ctx.store.get_subscription(invoice["subscription_id"]) if invoice["subscription_id"] is not None else None
+     )
+-    if invoice["attempt_count"] < len(offsets):
++    if invoice["attempt_count"] <= len(offsets):
+         base = invoice["finalized_at"] if invoice["finalized_at"] is not None else ctx.clock.now()
+         invoice["next_attempt_at"] = EpochSeconds(base + offsets[invoice["attempt_count"] - 1] * SECONDS_PER_DAY)
+         if subscription is not None and subscription["status"] in ("active", "trialing"):

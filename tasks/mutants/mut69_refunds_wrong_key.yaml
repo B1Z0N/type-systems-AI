@@ -1,0 +1,61 @@
+id: mut69_refunds_wrong_key
+category: bugfix
+stratum: type_relevant
+origin: mutant
+title: Random wrong key mutant in refunds.py
+read_only: false
+bug_kind: wrong_key
+checker_catches_at: l2
+relevant_files:
+- refunds.py
+mutations:
+- file: refunds.py
+  find: |2
+            payment["status"] = "refunded"
+  replace: |2
+            payment["ok"] = "refunded"
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+  import pytest
+  from billing.errors import InvalidStateError
+
+
+  def test_full_refund(world):
+      cus = world.customer()
+      world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+      [inv] = world.engine.invoices_for(cus["id"])
+      note = world.engine.refund(inv["id"])
+      assert note["amount"] == 1000
+      assert world.gateway.refunds == [("ch_000001", 1000)]
+      [payment] = world.ctx.store.payments_for_invoice(inv["id"])
+      assert payment["status"] == "refunded"
+      with pytest.raises(InvalidStateError):
+          world.engine.refund(inv["id"])
+  ```
+
+  It fails with:
+
+  ```
+  AssertionError: assert 'succeeded' == 'refunded'
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: refunds.py
+  function: refund_invoice
+grader:
+  type: tests
+  target_tests:
+  - base/test_dunning_refunds.py::test_full_refund
+mutant:
+  site: refunds.py:53
+  operator: wrong_key
+  index: 14
+  hidden_failing: 1
+  mypy_errors_l3: 1
+  mypy_errors_l2: 1

@@ -1,0 +1,23 @@
+id: b2_usage_not_billed
+category: bugfix
+stratum: type_relevant
+title: Metered usage missing from renewal invoices
+read_only: false
+checker_catches_at: none
+relevant_files: [usage.py, invoices.py, clock.py, engine.py]
+mutations:
+  - file: usage.py
+    find: "    start = to_millis(period_start)\n    end = to_millis(period_end)\n"
+    replace: "    start = period_start\n    end = period_end\n"
+prompt: |
+  Customers on metered plans are being under-billed: renewal invoices show a quantity of 0
+  for metered prices even though usage was reported during the period. Find the root cause
+  and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location: {file: usage.py, function: records_in_period}
+grader:
+  type: tests
+  target_tests:
+    - base/test_lifecycle.py::test_renewal_bills_usage_in_arrears
+    - base/test_lifecycle.py::test_usage_outside_period_not_billed

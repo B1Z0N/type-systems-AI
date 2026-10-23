@@ -1,0 +1,8 @@
+Add `subscriptions.extend_trial(ctx, subscription_id, days)`. It extends a trialing
+subscription's trial by `days` whole days: both `trial_end` and `current_period_end` move
+later by that amount, and a `subscription.updated` event is emitted. Raise
+`ValidationError` if `days` is not a positive integer and `InvalidStateError` if the
+subscription is not trialing. When the extended trial ends, billing starts as usual.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

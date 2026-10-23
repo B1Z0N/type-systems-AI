@@ -1,0 +1,13 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index e4028a2..e8c0182 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -43,7 +43,7 @@ def collect(ctx, invoice_id):
+         mark_paid(ctx, invoice, payment["amount"])
+         recover(ctx, invoice)
+     else:
+-        pass
++        record_failure(ctx, invoice, result["failure_code"])
+     return payment
+ 
+ 

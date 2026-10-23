@@ -1,0 +1,1 @@
+{"summary": "Added PluginOverrideMode (FAIL/REPLACE/IGNORE, env-configurable) and a mode parameter to register() to control collisions with existing providers."}

@@ -1,0 +1,56 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index b4569df..e2f9eeb 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -16,6 +16,7 @@ def collect(ctx, invoice_id):
+         return None
+     method = default_payment_method(ctx, invoice["customer_id"])
+     if method is None:
++        record_failure(ctx, invoice, "no_payment_method")
+         return None
+     now = ctx.clock.now()
+     if is_expired(method, now):
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..25f9284 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,7 @@
+ from billing import ledger
+ from billing.clock import format_date
++from billing.events import events_of_type
++from billing.models import SECONDS_PER_DAY
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -55,3 +57,31 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_missing_payment_method_enters_dunning_and_retries(world):
++    cus = world.customer(card=False)
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    assert inv["status"] == "open"
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] == inv["finalized_at"] + SECONDS_PER_DAY
++    assert sub["status"] == "past_due"
++    assert world.gateway.charges == []
++
++    previous_day = 0
++    for day, attempt, next_day in [(1, 2, 3), (3, 3, 7), (7, 4, None)]:
++        world.advance_days(day - previous_day)
++        assert inv["attempt_count"] == attempt
++        assert inv["next_attempt_at"] == (
++            inv["finalized_at"] + next_day * SECONDS_PER_DAY if next_day is not None else None
++        )
++        previous_day = day
++
++    assert sub["status"] == "unpaid"
++    assert inv["status"] == "open"
++    assert world.gateway.charges == []
++    failures = events_of_type(world.ctx, "invoice.payment_failed")
++    assert [event["payload"]["failure_code"] for event in failures] == ["no_payment_method"] * 4
++    assert [event["payload"]["attempt"] for event in failures] == [1, 2, 3, 4]

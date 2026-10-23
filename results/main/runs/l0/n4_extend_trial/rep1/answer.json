@@ -1,0 +1,1 @@
+{"summary": "Added subscriptions.extend_trial, which validates days, requires trialing status, shifts trial_end and current_period_end, and emits subscription.updated."}

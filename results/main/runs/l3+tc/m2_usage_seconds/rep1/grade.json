@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 4,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Usage records now store timestamp in epoch seconds (plus a sub-second ms remainder field) while report_usage and POST /usage still accept and return epoch milliseconds, with billing results unchanged."
+  },
+  "answer_error": null
+}

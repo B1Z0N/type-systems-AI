@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Oracle Linux advisories now preserve architecture-specific fixed versions while deduplicating shared fixes under OS schema 1.1.1."
+  },
+  "answer_error": null
+}

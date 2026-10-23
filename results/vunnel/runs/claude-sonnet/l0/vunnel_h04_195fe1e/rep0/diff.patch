@@ -1,0 +1,175 @@
+diff --git a/src/vunnel/providers/alma/__init__.py b/src/vunnel/providers/alma/__init__.py
+index 92ba92b..c22ec9a 100644
+--- a/src/vunnel/providers/alma/__init__.py
++++ b/src/vunnel/providers/alma/__init__.py
+@@ -54,7 +54,7 @@ class Provider(provider.Provider):
+         with timer(self.name(), self.logger):
+             # TODO: use of last_updated as NVD provider does to avoid downloading all
+             # vulnerability data from the source and make incremental updates instead
+-            with self.results_writer() as writer:
++            with self.results_writer() as writer, self.parser:
+                 for vuln_id, vuln_schema_version, record in self.parser.get():
+                     vuln_schema = self.compatible_schema(vuln_schema_version)
+                     if not vuln_schema:
+diff --git a/src/vunnel/providers/alma/parser.py b/src/vunnel/providers/alma/parser.py
+index e5edcc0..e9e4760 100644
+--- a/src/vunnel/providers/alma/parser.py
++++ b/src/vunnel/providers/alma/parser.py
+@@ -1,10 +1,15 @@
+ from __future__ import annotations
+ 
++import copy
++import datetime
+ import logging
+ import os
+ 
+ import orjson
+ 
++from vunnel.tool import fixdate
++from vunnel.utils import osv
++
+ from .git import GitWrapper
+ 
+ _known_library_gaps_ = {
+@@ -28,7 +33,10 @@ class Parser:
+     # TODO: Remove once AlmaLinux fixes these gaps upstream
+     # Last audit: 2025-10-14
+ 
+-    def __init__(self, ws, logger=None, alma_linux_versions=None):
++    def __init__(self, ws, fixdater=None, logger=None, alma_linux_versions=None):
++        if not fixdater:
++            fixdater = fixdate.default_finder(ws)
++        self.fixdater = fixdater
+         if alma_linux_versions is None:
+             alma_linux_versions = ["8", "9", "10"]
+         self.alma_linux_versions = alma_linux_versions
+@@ -44,6 +52,13 @@ class Parser:
+             source=self.git_url, branch=self.git_branch, checkout_dest=_checkout_dst_, logger=self.logger
+         )
+ 
++    def __enter__(self):
++        self.fixdater.__enter__()
++        return self
++
++    def __exit__(self, exc_type, exc_val, exc_tb):
++        self.fixdater.__exit__(exc_type, exc_val, exc_tb)
++
+     def _load(self, version):
+         self.logger.info("loading data from git repository")
+ 
+@@ -83,8 +98,7 @@ class Parser:
+                     continue
+ 
+                 # Clone the affected entry for the library package
+-                library_affected = affected_pkg.copy()
+-                library_affected["package"] = affected_pkg["package"].copy()
++                library_affected = copy.deepcopy(affected_pkg)
+                 library_affected["package"]["name"] = library_pkg_name
+ 
+                 # Add to affected list
+@@ -119,6 +133,8 @@ class Parser:
+         # Add missing library packages for known advisory gaps
+         self._add_missing_library_packages(vuln_entry)
+ 
++        self._patch_fix_dates(vuln_entry)
++
+         # Add anchore-specific metadata to indicate this is an advisory record
+         if "database_specific" not in vuln_entry:
+             vuln_entry["database_specific"] = {}
+@@ -128,6 +144,23 @@ class Parser:
+ 
+         return os.path.join(f"almalinux{version}", vuln_id), vuln_schema, vuln_entry
+ 
++    def _patch_fix_dates(self, vuln_entry):
++        # use the UTC date of the advisory's published timestamp as the fix date candidate. A shallow copy is
++        # patched so the record's own "published" field is left untouched (ranges are shared with the original).
++        published = vuln_entry.get("published")
++        if not published:
++            return
++        try:
++            parsed = datetime.datetime.fromisoformat(published.replace("Z", "+00:00"))
++        except ValueError:
++            self.logger.warning(f"unable to parse published date {published!r} for {vuln_entry.get('id')}")
++            return
++        if parsed.tzinfo is not None:
++            parsed = parsed.astimezone(datetime.timezone.utc)
++        patched = dict(vuln_entry)
++        patched["published"] = parsed.date().isoformat()
++        osv.patch_fix_date(patched, self.fixdater)
++
+     def _parse_modularity_from_summary(self, summary):
+         """Parse modularity information from OSV summary field.
+ 
+@@ -162,6 +195,8 @@ class Parser:
+         # Initialize the git repository
+         self.git_wrapper.delete_repo()
+         self.git_wrapper.clone_repo()
++        # fix date data is downloaded once per run
++        self.fixdater.download()
+         for version in self.alma_linux_versions:
+             for vuln_entry in self._load(version):
+                 # Normalize the loaded data
+diff --git a/tests/unit/providers/alma/test_alma.py b/tests/unit/providers/alma/test_alma.py
+index 29702ea..46cab63 100644
+--- a/tests/unit/providers/alma/test_alma.py
++++ b/tests/unit/providers/alma/test_alma.py
+@@ -8,7 +8,7 @@ from vunnel.providers.alma.parser import Parser
+ 
+ @patch("vunnel.providers.alma.git.GitWrapper.clone_repo")
+ @patch("vunnel.providers.alma.git.GitWrapper.delete_repo")
+-def test_provider_schema(mock_git_delete, mock_git_clone, helpers):
++def test_provider_schema(mock_git_delete, mock_git_clone, helpers, auto_fake_fixdate_finder):
+     mock_git_clone.return_value = None
+     mock_git_delete.return_value = None
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+@@ -17,14 +17,15 @@ def test_provider_schema(mock_git_delete, mock_git_clone, helpers):
+     p = Provider(root=workspace.root, config=c)
+     mock_data_path = helpers.local_dir("test-fixtures")
+     shutil.copytree(mock_data_path, workspace.input_dir, dirs_exist_ok=True)
+-    p.update(None)
++    with patch.object(p.parser.fixdater, "download"):
++        p.update(None)
+ 
+     assert 5 == workspace.num_result_entries()
+     assert workspace.result_schemas_valid(require_entries=True)
+ 
+ @patch("vunnel.providers.alma.git.GitWrapper.clone_repo")
+ @patch("vunnel.providers.alma.git.GitWrapper.delete_repo")
+-def test_parser(mock_git_delete, mock_git_clone, helpers):
++def test_parser(mock_git_delete, mock_git_clone, helpers, auto_fake_fixdate_finder):
+     mock_git_clone.return_value = None
+     mock_git_delete.return_value = None
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+@@ -56,7 +57,7 @@ def test_parser(mock_git_delete, mock_git_clone, helpers):
+         assert affected_pkg["ecosystem_specific"]["rpm_modularity"] == "mariadb:10.3"
+ 
+ 
+-def test_modularity_parsing(helpers):
++def test_modularity_parsing(helpers, auto_fake_fixdate_finder):
+     """Test the _parse_modularity_from_summary method."""
+     workspace = helpers.provider_workspace_helper(name=Provider.name())
+     parser = Parser(ws=workspace)
+@@ -83,3 +84,23 @@ def test_modularity_parsing(helpers):
+     for summary, expected in test_cases:
+         result = parser._parse_modularity_from_summary(summary)
+         assert result == expected, f"Failed for '{summary}': got '{result}', expected '{expected}'"
++
++
++@patch("vunnel.providers.alma.git.GitWrapper.clone_repo")
++@patch("vunnel.providers.alma.git.GitWrapper.delete_repo")
++def test_parser_fix_dates(mock_git_delete, mock_git_clone, helpers, auto_fake_fixdate_finder):
++    workspace = helpers.provider_workspace_helper(name=Provider.name())
++    shutil.copytree(helpers.local_dir("test-fixtures"), workspace.input_dir, dirs_exist_ok=True)
++    with Parser(ws=workspace, logger=None) as parser:
++        records = {k: r for k, _, r in parser.get()}
++
++    for record in records.values():
++        assert record["database_specific"]["anchore"] == {"record_type": "advisory"}
++        for affected in record["affected"]:
++            for r in affected["ranges"]:
++                fixed = [e["fixed"] for e in r["events"] if "fixed" in e]
++                fixes = r.get("database_specific", {}).get("anchore", {}).get("fixes", [])
++                assert [f["version"] for f in fixes] == fixed
++                for f in fixes:
++                    assert f["date"] == record["published"][:10]
++                    assert f["kind"] == "advisory"

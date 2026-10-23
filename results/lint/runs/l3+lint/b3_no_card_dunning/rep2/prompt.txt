@@ -1,0 +1,6 @@
+Customers who have no payment method on file never enter dunning: their first invoice
+stays open forever, no retry is ever scheduled, no payment-failed event is emitted, and
+the subscription stays `active`. Find the root cause and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

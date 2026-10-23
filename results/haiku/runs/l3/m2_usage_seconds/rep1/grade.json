@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 4,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Usage record timestamps are now stored in epoch seconds (converted from the client's milliseconds on input and back to milliseconds in the POST /usage response), with period boundaries and aggregation comparing in seconds; all 27 tests pass."
+  },
+  "answer_error": null
+}

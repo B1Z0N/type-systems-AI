@@ -1,0 +1,27 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index ffb79f0..704adec 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -69,4 +69,4 @@ def recover(ctx: Context, invoice: Invoice) -> None:
+         if inv["status"] == "open" and inv["id"] != invoice["id"]
+     ]
+     if not outstanding:
+-        pass
++        transition(ctx, subscription, "active")
+diff --git a/tests/test_recovery_repro.py b/tests/test_recovery_repro.py
+new file mode 100644
+index 0000000..c44d70d
+--- /dev/null
++++ b/tests/test_recovery_repro.py
+@@ -0,0 +1,11 @@
++
++
++def test_recovery_after_retry_succeeds(world):
++    cus = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    assert sub["status"] == "past_due"
++    world.advance_days(1)
++    assert sub["status"] == "active"
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"

@@ -1,0 +1,13 @@
+diff --git a/billing/render.py b/billing/render.py
+index 0ab1d7b..cb0bd3f 100644
+--- a/billing/render.py
++++ b/billing/render.py
+@@ -47,7 +47,7 @@ def render_invoice(ctx, invoice):
+         out.append(_row("Credit applied", format_amount(-invoice["credit_applied"], currency)))
+     if invoice["amount_paid"]:
+         out.append(_row("Paid", format_amount(-invoice["amount_paid"], currency)))
+-    out.append(_row("Amount due", format_amount(currency, invoice["amount_due"])))
++    out.append(_row("Amount due", format_amount(invoice["amount_due"], currency)))
+     return "\n".join(out)
+ 
+ 

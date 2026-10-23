@@ -1,0 +1,139 @@
+diff --git a/src/vunnel/providers/chainguard_libraries/__init__.py b/src/vunnel/providers/chainguard_libraries/__init__.py
+index f984b06..1f5aa89 100644
+--- a/src/vunnel/providers/chainguard_libraries/__init__.py
++++ b/src/vunnel/providers/chainguard_libraries/__init__.py
+@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
+ from vunnel import provider, result, schema
+ from vunnel.utils import timer
+ 
+-from .openvex_parser import OpenVEXParser
++from .openvex_parser import DEFAULT_VERSION_MARKERS, OpenVEXParser, normalize_version_markers
+ 
+ if TYPE_CHECKING:
+     import datetime
+@@ -33,6 +33,11 @@ class Config:
+     )
+     request_timeout: int = 125
+     openvex_url: str = "https://libraries.cgr.dev/openvex/v1/all.json"
++    # purl type -> marker a Chainguard-built version must contain; a null value disables that ecosystem
++    version_markers: dict[str, str | None] = field(default_factory=lambda: dict(DEFAULT_VERSION_MARKERS))
++
++    def __post_init__(self) -> None:
++        self.version_markers = normalize_version_markers(self.version_markers)  # type: ignore[assignment]
+ 
+ 
+ class Provider(provider.Provider):
+@@ -54,6 +59,7 @@ class Provider(provider.Provider):
+             download_timeout=self.config.request_timeout,
+             logger=self.logger,
+             user_agent=self.runtime_cfg.user_agent,
++            version_markers=self.config.version_markers,
+         )
+ 
+         # this provider requires the previous state from former runs
+diff --git a/src/vunnel/providers/chainguard_libraries/openvex_parser.py b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+index 75a481d..fa7da0d 100644
+--- a/src/vunnel/providers/chainguard_libraries/openvex_parser.py
++++ b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+@@ -19,6 +19,21 @@ if TYPE_CHECKING:
+     from vunnel import workspace
+ 
+ 
++DEFAULT_VERSION_MARKERS = {"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}
++
++
++def normalize_version_markers(markers: Any) -> dict[str, str]:
++    """
++    Validate a purl type -> version marker map, dropping ecosystems disabled with a null marker.
++    """
++    if not isinstance(markers, dict):
++        raise ValueError(f"version_markers must be a map of purl type to marker, got {type(markers).__name__}")
++    empty = sorted(k for k, v in markers.items() if v is not None and v == "")
++    if empty:
++        raise ValueError(f"empty version marker for {empty}")
++    return {k: v for k, v in markers.items() if v is not None}
++
++
+ class OpenVEXParser:
+     _openvex_dir_ = "openvex"
+     _security_reference_url_ = "https://images.chainguard.dev/security"
+@@ -33,6 +48,7 @@ class OpenVEXParser:
+         logger: logging.Logger | None = None,
+         security_reference_url: str | None = None,
+         user_agent: str | None = None,
++        version_markers: dict[str, str | None] | None = None,
+     ):
+         """
+         :param workspace.Workspace workspace: workspace to use for downloads and storage
+@@ -42,7 +58,11 @@ class OpenVEXParser:
+         :param logging.Logger logger:
+         :type string security_reference_url: location for security information
+         :param str user_agent: User-Agent header for HTTP requests
++        :param dict version_markers: purl type -> marker a Chainguard-built version must contain
+         """
++        self.version_markers = normalize_version_markers(
++            DEFAULT_VERSION_MARKERS if version_markers is None else version_markers
++        )
+         self.download_timeout = download_timeout
+         self.namespace = namespace
+         self.workspace = workspace
+@@ -239,7 +259,7 @@ class OpenVEXParser:
+         :param statement: [openvex statement](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md)
+         :return: statement with only chainguard products
+         """
+-        d = {"pypi": "+cgr.", "maven": ".cgr."}
++        d = self.version_markers
+         new_products = []
+         for product in statement.get("products", []):
+             pid = self._get_purl(product)
+diff --git a/tests/unit/cli/test_cli.py b/tests/unit/cli/test_cli.py
+index 63ac1d2..333d718 100644
+--- a/tests/unit/cli/test_cli.py
++++ b/tests/unit/cli/test_cli.py
+@@ -304,6 +304,11 @@ providers:
+       skip_download: false
+       skip_newer_archive_check: false
+       user_agent: anchore/vunnel-$VUNNEL_VERSION
++    version_markers:
++      golang: -cgr.
++      maven: .cgr.
++      npm: -cgr.
++      pypi: +cgr.
+   common:
+     import_results:
+       enabled: false
+diff --git a/tests/unit/providers/chainguard_libraries/test_openvex_parser.py b/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
+index d7612c9..dbb4fef 100644
+--- a/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
++++ b/tests/unit/providers/chainguard_libraries/test_openvex_parser.py
+@@ -223,3 +223,30 @@ class TestOpenVEXParser:
+ 
+             assert parser.logger == mock_logger
+             mock_get_logger.assert_called_with("OpenVEXParser")
++
++
++def _markers_parser(tmp_path, **kwargs):
++    from vunnel import workspace
++
++    ws = workspace.Workspace(tmp_path, "test", create=True)
++    return OpenVEXParser(workspace=ws, url="http://localhost/all.json", namespace="t", fixdater=Mock(), **kwargs)
++
++
++def test_default_version_markers_keep_npm_and_golang(tmp_path):
++    parser = _markers_parser(tmp_path)
++    assert parser.version_markers == {"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}
++    products = [
++        {"@id": "pkg:npm/foo@1.0.0-cgr.1"},
++        {"@id": "pkg:golang/example.com/foo@v1.0.0-cgr.1"},
++        {"@id": "pkg:npm/foo@1.0.0"},
++        {"@id": "pkg:cargo/foo@1.0.0-cgr.1"},
++    ]
++    out = parser._filter_statements({"products": products})
++    assert out["products"] == products[:2]
++
++
++def test_version_markers_validation(tmp_path):
++    with pytest.raises(ValueError, match=r"empty version marker for \['npm'\]"):
++        _markers_parser(tmp_path, version_markers={"npm": ""})
++    with pytest.raises(ValueError, match="version_markers must be a map"):
++        _markers_parser(tmp_path, version_markers="abc")

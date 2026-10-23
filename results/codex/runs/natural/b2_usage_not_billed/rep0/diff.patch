@@ -1,0 +1,50 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index e72b4c6..e56d88d 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -43,8 +43,8 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     """Usage records within [period_start, period_end) (epoch seconds), oldest first."""
+-    start_ms = period_start
+-    end_ms = period_end
++    start_ms = to_millis(period_start)
++    end_ms = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start_ms <= record["timestamp"] < end_ms
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..580d4fb 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -34,6 +34,30 @@ def test_cancel_at_period_end(world):
+     assert len(world.engine.invoices_for(cus["id"])) == 1
+ 
+ 
++def test_metered_usage_is_billed_in_the_period_reported(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    start = sub["current_period_start"]
++    end = sub["current_period_end"]
++    assert world.engine.invoices_for(cus["id"])[0]["lines"] == []
++
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 2, timestamp=start * 1000)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 3, timestamp=end * 1000 - 1)
++    world.clock.set(end)
++    [first_renewal] = world.engine.run_cycle()
++    [first_usage_line] = first_renewal["lines"]
++    assert first_usage_line["quantity"] == 5
++    assert first_usage_line["amount"] == 10
++    assert (first_usage_line["period_start"], first_usage_line["period_end"]) == (start, end)
++
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 7, timestamp=end * 1000)
++    world.clock.set(sub["current_period_end"])
++    [second_renewal] = world.engine.run_cycle()
++    [second_usage_line] = second_renewal["lines"]
++    assert second_usage_line["quantity"] == 7
++    assert second_usage_line["amount"] == 14
++
++
+ def test_upgrade_prorates_on_next_invoice(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])

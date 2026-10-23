@@ -1,0 +1,52 @@
+diff --git a/billing/render.py b/billing/render.py
+index 7f8caa0..fff5915 100644
+--- a/billing/render.py
++++ b/billing/render.py
+@@ -42,7 +42,9 @@ def render_invoice(ctx: Context, invoice: Invoice) -> str:
+         rates = sorted({line["tax_rate"] for line in invoice["lines"] if line["tax_amount"]})
+         label = "Tax (" + ", ".join(format_rate(rate) for rate in rates) + ")"
+         inclusive = all(line["tax_inclusive"] for line in invoice["lines"] if line["tax_amount"])
+-        pass
++        if inclusive:
++            label += " (included)"
++        out.append(_row(label, format_amount(invoice["tax_total"], currency)))
+     out.append(_row("Total", format_amount(invoice["total"], currency)))
+     if invoice["credit_applied"]:
+         out.append(_row("Credit applied", format_amount(Cents(-invoice["credit_applied"]), currency)))
+diff --git a/tests/test_discounts_tax.py b/tests/test_discounts_tax.py
+index 3dcbd8f..0e6a5f0 100644
+--- a/tests/test_discounts_tax.py
++++ b/tests/test_discounts_tax.py
+@@ -1,4 +1,5 @@
+ from billing import discounts, tax
++from billing.render import render_invoice
+ 
+ 
+ def test_amount_off_allocated_across_lines(world):
+@@ -20,6 +21,18 @@ def test_exclusive_tax_after_discount(world):
+     assert inv["total"] == 900 + 74
+ 
+ 
++def test_render_invoice_shows_exclusive_tax(world):
++    tax.set_tax_rate(world.ctx, "US-CA", 825, "CA")
++    cus = world.customer(region="US-CA")
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++
++    text = render_invoice(world.ctx, inv)
++    assert "Invoice INV-00001" in text
++    assert "Tax (8.25%)" in text
++    assert "$10.82" in text
++
++
+ def test_inclusive_tax(world):
+     from billing import catalog
+ 
+@@ -30,6 +43,7 @@ def test_inclusive_tax(world):
+     [inv] = world.engine.invoices_for(cus["id"])
+     assert inv["tax_total"] == 200
+     assert inv["total"] == 1200
++    assert "Tax (20%) (included)" in render_invoice(world.ctx, inv)
+ 
+ 
+ def test_region_fallback_and_exempt(world):

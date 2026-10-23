@@ -1,0 +1,95 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index 9183b27..f4f20bb 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -135,6 +135,23 @@ def change_items(ctx, subscription_id, items, *, prorate=True):
+     return subscription
+ 
+ 
++def extend_trial(ctx, subscription_id, days):
++    if isinstance(days, bool) or not isinstance(days, int) or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    if subscription["status"] != "trialing":
++        raise InvalidStateError("only trialing subscriptions can be extended")
++    extension = days * SECONDS_PER_DAY
++    subscription["trial_end"] += extension
++    subscription["current_period_end"] += extension
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def cancel(ctx, subscription_id, *, at_period_end=True):
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] == "canceled":
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..588e722 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,9 @@
+-from billing import ledger
++import pytest
++
++from billing import ledger, subscriptions
+ from billing.clock import format_date
++from billing.errors import InvalidStateError, ValidationError
++from billing.events import events_of_type
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -24,6 +28,51 @@ def test_trial_converts_and_invoices(world):
+     assert inv["total"] == 1000
+ 
+ 
++def test_extend_trial_delays_billing_until_new_end(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    original_end = sub["trial_end"]
++
++    assert subscriptions.extend_trial(world.ctx, sub["id"], 3) is sub
++    assert sub["trial_end"] == original_end + 3 * 86_400
++    assert sub["current_period_end"] == sub["trial_end"]
++    [event] = events_of_type(world.ctx, "subscription.updated")
++    assert event["payload"]["subscription"]["current_period_end"] == sub["trial_end"]
++
++    assert world.advance_days(16) == []
++    assert sub["status"] == "trialing"
++    assert world.advance_days(1)
++    assert sub["status"] == "active"
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["total"] == 1000
++
++
++@pytest.mark.parametrize("days", [0, -1, 1.5, "2", True, None])
++def test_extend_trial_rejects_invalid_days(world, days):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    original_end = sub["trial_end"]
++
++    with pytest.raises(ValidationError):
++        subscriptions.extend_trial(world.ctx, sub["id"], days)
++
++    assert sub["trial_end"] == original_end
++    assert sub["current_period_end"] == original_end
++    assert events_of_type(world.ctx, "subscription.updated") == []
++
++
++def test_extend_trial_requires_trialing_subscription(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    original_end = sub["current_period_end"]
++
++    with pytest.raises(InvalidStateError):
++        subscriptions.extend_trial(world.ctx, sub["id"], 3)
++
++    assert sub["current_period_end"] == original_end
++    assert events_of_type(world.ctx, "subscription.updated") == []
++
++
+ def test_cancel_at_period_end(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])

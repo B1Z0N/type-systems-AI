@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 3,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added subscriptions.extend_trial, which pushes a trialing subscription's trial_end and current_period_end back by whole days, emits subscription.updated, and raises ValidationError or InvalidStateError on bad input, with tests covering billing starting at the extended date."
+  },
+  "answer_error": null
+}

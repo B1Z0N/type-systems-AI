@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds (converted from millisecond input), with the API converting back to milliseconds in responses and period filtering done in seconds."}

@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 2,
+  "target_total": 2,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "SecDBParser.build_reference_links now tolerates ids without CVE-/GHSA- prefix, returning just the distro security page link."
+  },
+  "answer_error": null
+}

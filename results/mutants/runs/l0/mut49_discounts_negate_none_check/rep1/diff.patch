@@ -1,0 +1,28 @@
+diff --git a/billing/discounts.py b/billing/discounts.py
+index ff0bfb9..97703e9 100644
+--- a/billing/discounts.py
++++ b/billing/discounts.py
+@@ -86,7 +86,7 @@ def _eligible(coupon, line, plan_of):
+     if plans is None:
+         return True
+     price_id = line["price_id"]
+-    return price_id is None and plan_of.get(price_id) in plans
++    return price_id is not None and plan_of.get(price_id) in plans
+ 
+ 
+ def line_discounts(coupon, lines, currency, plan_of):
+diff --git a/tests/test_plan_coupon.py b/tests/test_plan_coupon.py
+new file mode 100644
+index 0000000..e682c6d
+--- /dev/null
++++ b/tests/test_plan_coupon.py
+@@ -0,0 +1,9 @@
++from billing import discounts
++
++
++def test_plan_restricted_coupon(world):
++    cus = world.customer()
++    coupon = discounts.create_coupon(world.ctx, "team", percent_off=5000, applies_to_plans=[world.team["id"]])
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1), (world.team_monthly["id"], 1)], coupon_id=coupon["id"])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert [line["discount_amount"] for line in inv["lines"]] == [0, 1500]

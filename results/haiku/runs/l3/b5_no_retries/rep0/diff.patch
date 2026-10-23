@@ -1,0 +1,45 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index a7a2c70..c9ba953 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -51,7 +51,7 @@ def due_for_retry(ctx: Context, now: EpochSeconds) -> list[InvoiceId]:
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "opened"
++        if invoice["status"] == "open"
+         and invoice["next_attempt_at"] is not None
+         and invoice["next_attempt_at"] <= now
+     ]
+diff --git a/tests/test_dunning_retry.py b/tests/test_dunning_retry.py
+new file mode 100644
+index 0000000..532740b
+--- /dev/null
++++ b/tests/test_dunning_retry.py
+@@ -0,0 +1,26 @@
++
++def test_declined_renewal_is_retried_and_recovers(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    world.gateway.fail_next = ["card_declined"]
++    world.advance_days(31)
++    assert sub["status"] == "past_due"
++    [failed] = [inv for inv in world.engine.invoices_for(cus["id"]) if inv["status"] == "open"]
++    assert failed["next_attempt_at"] is not None
++
++    world.advance_days(1)
++    assert sub["status"] == "active"
++    assert failed["status"] == "paid"
++    assert failed["next_attempt_at"] is None
++
++
++def test_repeated_declines_escalate_to_unpaid(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    world.gateway.fail_next = ["card_declined"] * 4
++    world.advance_days(31)
++    assert sub["status"] == "past_due"
++    world.advance_days(1)
++    world.advance_days(3)
++    world.advance_days(7)
++    assert sub["status"] == "unpaid"

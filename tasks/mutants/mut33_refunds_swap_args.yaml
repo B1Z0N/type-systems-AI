@@ -1,0 +1,58 @@
+id: mut33_refunds_swap_args
+category: bugfix
+stratum: type_relevant
+origin: mutant
+title: Random swap args mutant in refunds.py
+read_only: false
+bug_kind: swap_args
+checker_catches_at: l2
+relevant_files:
+- refunds.py
+mutations:
+- file: refunds.py
+  find: |2
+        payments = successful_payments(ctx, invoice["id"])
+  replace: |2
+        payments = successful_payments(invoice["id"], ctx)
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+  from billing import reports
+
+
+  def test_revenue_between_nets_credit_notes(world):
+      cus = world.customer()
+      world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+      [inv] = world.engine.invoices_for(cus["id"])
+      world.engine.refund(inv["id"])
+      assert reports.revenue_between(world.ctx, inv["paid_at"], inv["paid_at"] + 1) == {"usd": 0}
+  ```
+
+  It fails with:
+
+  ```
+  AttributeError: 'str' object has no attribute 'store'
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: refunds.py
+  function: refund_invoice
+grader:
+  type: tests
+  target_tests:
+  - base/test_dunning_refunds.py::test_full_refund
+  - base/test_dunning_refunds.py::test_refund_returns_applied_credit
+  - base/test_dunning_refunds.py::test_refund_with_multiple_customers
+  - base/test_webhooks_reports_api.py::test_revenue_between_nets_credit_notes
+mutant:
+  site: refunds.py:43
+  operator: swap_args
+  index: 2
+  hidden_failing: 4
+  mypy_errors_l3: 2
+  mypy_errors_l2: 2

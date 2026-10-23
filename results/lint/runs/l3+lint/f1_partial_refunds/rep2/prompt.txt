@@ -1,0 +1,17 @@
+Add partial refunds.
+
+- `refunds.refund_invoice(ctx, invoice_id, reason=..., amount=None)` and
+  `BillingEngine.refund(invoice_id, reason=..., amount=None)` accept an optional `amount`
+  in minor units. The `POST /invoices/{id}/refund` API accepts an optional `amount` too.
+- With an amount: refund that much money through the gateway, taking it from the invoice's
+  successful payments oldest first. A payment that is partly refunded gets status
+  `partially_refunded`; once fully refunded it gets `refunded`. Each refund creates one
+  credit note with `refunded=True` and the refunded amount. Several partial refunds are
+  allowed until the paid money is exhausted.
+- An amount <= 0 or larger than what remains refundable raises `ValidationError`.
+- Without an amount: refund all money that remains refundable, and return any applied
+  account credit as today. After partial refunds this refunds only the remainder.
+- If nothing remains to refund, raise `InvalidStateError` (as today for a second full refund).
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

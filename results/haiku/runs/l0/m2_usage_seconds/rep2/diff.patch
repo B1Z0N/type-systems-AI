@@ -1,0 +1,109 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 57987e0..4f5da1b 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -1,12 +1,19 @@
+ """Metered usage reporting and aggregation."""
+ 
+-from .clock import to_millis
++from .clock import to_millis, to_seconds
+ from .errors import ValidationError
+ 
+ 
++def _client_view(record):
++    """Expose a stored record with its timestamp in the epoch milliseconds clients send and receive."""
++    view = {key: value for key, value in record.items() if key != "subsecond_millis"}
++    view["timestamp"] = to_millis(record["timestamp"]) + record["subsecond_millis"]
++    return view
++
++
+ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idempotency_key=None):
+     if idempotency_key is not None and idempotency_key in ctx.store.usage_keys:
+-        return ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]]
++        return _client_view(ctx.store.usage_records[ctx.store.usage_keys[idempotency_key]])
+     subscription = ctx.store.require_subscription(subscription_id)
+     if subscription["status"] in ("canceled", "paused"):
+         raise ValidationError(f"cannot report usage on a {subscription['status']} subscription")
+@@ -17,27 +24,34 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+         raise ValidationError("price is not part of the subscription")
+     if quantity < 0:
+         raise ValidationError("usage quantity cannot be negative")
++    if timestamp is None:
++        seconds, subsecond_millis = ctx.clock.now(), 0
++    else:
++        # Keep the sub-second part so ordering and the client-facing timestamp stay exact.
++        seconds = to_seconds(timestamp)
++        subsecond_millis = timestamp - to_millis(seconds)
+     record = {
+         "id": ctx.ids.usage_record(),
+         "subscription_id": subscription_id,
+         "price_id": price_id,
+         "quantity": quantity,
+-        "timestamp": timestamp if timestamp is not None else to_millis(ctx.clock.now()),
++        "timestamp": seconds,
++        "subsecond_millis": subsecond_millis,
+         "idempotency_key": idempotency_key,
+     }
+     ctx.store.usage_records[record["id"]] = record
+     if idempotency_key is not None:
+         ctx.store.usage_keys[idempotency_key] = record["id"]
+-    return record
++    return _client_view(record)
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+-    start = to_millis(period_start)
+-    end = to_millis(period_end)
+     records = [
+-        record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
++        record
++        for record in ctx.store.usage_for(subscription_id, price_id)
++        if period_start <= record["timestamp"] < period_end
+     ]
+-    return sorted(records, key=lambda record: (record["timestamp"], record["id"]))
++    return sorted(records, key=lambda record: (record["timestamp"], record["subsecond_millis"], record["id"]))
+ 
+ 
+ def aggregate_usage(ctx, subscription_id, price_id, period_start, period_end):
+diff --git a/tests/test_usage.py b/tests/test_usage.py
+new file mode 100644
+index 0000000..7ec379f
+--- /dev/null
++++ b/tests/test_usage.py
+@@ -0,0 +1,36 @@
++from billing import catalog, customers
++from billing.clock import epoch
++from billing.usage import records_in_period
++
++
++def _metered_subscription(world, aggregation="last"):
++    price = catalog.create_price(
++        world.ctx, world.api["id"], "usd", "metered", unit_amount=2, usage_aggregation=aggregation
++    )
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(price["id"], 0)])
++    return sub, price
++
++
++def test_usage_is_stored_in_epoch_seconds(world):
++    sub, price = _metered_subscription(world)
++    t = epoch(2026, 1, 16, 9)
++    record = world.engine.report_usage(sub["id"], price["id"], 4, t * 1000 + 250)
++    assert record["timestamp"] == t * 1000 + 250
++    stored = world.ctx.store.usage_records[record["id"]]
++    assert stored["timestamp"] == t
++
++
++def test_sub_second_order_is_preserved_for_last(world):
++    sub, price = _metered_subscription(world, aggregation="last")
++    t = epoch(2026, 1, 16, 9)
++    world.engine.report_usage(sub["id"], price["id"], 5, t * 1000 + 900)
++    world.engine.report_usage(sub["id"], price["id"], 7, t * 1000 + 100)
++    records = records_in_period(world.ctx, sub["id"], price["id"], t - 60, t + 60)
++    assert [r["quantity"] for r in records] == [7, 5]
++
++
++def test_default_timestamp_is_now_in_milliseconds_to_clients(world):
++    sub, price = _metered_subscription(world)
++    record = world.engine.report_usage(sub["id"], price["id"], 1, None)
++    assert record["timestamp"] == world.clock.now() * 1000

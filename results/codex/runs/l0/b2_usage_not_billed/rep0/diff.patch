@@ -1,0 +1,47 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 791e8ec..57987e0 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -32,8 +32,8 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+-    start = period_start
+-    end = period_end
++    start = to_millis(period_start)
++    end = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..182862e 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,27 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_metered_usage_is_billed_in_the_period_reported(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    first_end = sub["current_period_end"]
++
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 3)
++    world.clock.advance_days(10)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 2)
++    world.clock.set(first_end)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 7)
++
++    [first_renewal] = world.engine.run_cycle()
++    [first_line] = first_renewal["lines"]
++    assert first_line["quantity"] == 5
++    assert first_line["amount"] == 10
++    assert (first_line["period_start"], first_line["period_end"]) == (sub["created_at"], first_end)
++
++    world.clock.set(sub["current_period_end"])
++    [second_renewal] = world.engine.run_cycle()
++    [second_line] = second_renewal["lines"]
++    assert second_line["quantity"] == 7
++    assert second_line["amount"] == 14

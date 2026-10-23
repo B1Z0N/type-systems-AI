@@ -1,0 +1,48 @@
+diff --git a/src/vunnel/providers/wolfi/parser.py b/src/vunnel/providers/wolfi/parser.py
+index 40d3d68..7b5ff27 100644
+--- a/src/vunnel/providers/wolfi/parser.py
++++ b/src/vunnel/providers/wolfi/parser.py
+@@ -71,7 +71,7 @@ class Parser(abc.ABC):
+     def build_reference_links(self, vulnerability_id: str) -> list[str]:
+         urls = []
+         urls.append(f"{self.security_reference_url}/{vulnerability_id}")
+-        urls.extend(vulnerability.build_reference_links(vulnerability_id))
++        urls.extend(vulnerability.build_reference_links(vulnerability_id) or [])
+         return urls
+ 
+     @abc.abstractmethod
+diff --git a/tests/unit/providers/wolfi/test_wolfi.py b/tests/unit/providers/wolfi/test_wolfi.py
+index e88bf5c..08b983a 100644
+--- a/tests/unit/providers/wolfi/test_wolfi.py
++++ b/tests/unit/providers/wolfi/test_wolfi.py
+@@ -22,6 +22,30 @@ OSV_SCHEMA_PATH = (
+ 
+ 
+ class TestParser:
++    @pytest.mark.parametrize("namespace", ["wolfi", "chainguard"])
++    def test_secdb_non_cve_reference_links(self, tmpdir, namespace, auto_fake_fixdate_finder):
++        p = SecDBParser(
++            workspace=workspace.Workspace(tmpdir, "test", create=True),
++            url="https://example.com/security.json",
++            namespace=namespace,
++        )
++        vuln_id = "GO-2026-5932"
++
++        assert p.build_reference_links(vuln_id) == [f"{p.security_reference_url}/{vuln_id}"]
++
++        records = p._normalize(
++            "rolling",
++            {"packages": [{"pkg": {"name": "go", "secfixes": {"1.2.3-r0": [vuln_id]}}}]},
++        )
++        assert records[vuln_id]["Vulnerability"]["Link"] == f"{p.security_reference_url}/{vuln_id}"
++
++        cve_id = "CVE-2022-30065"
++        assert p.build_reference_links(cve_id) == [
++            f"{p.security_reference_url}/{cve_id}",
++            f"https://www.cve.org/CVERecord?id={cve_id}",
++            f"https://nvd.nist.gov/vuln/detail/{cve_id}",
++        ]
++
+     @pytest.fixture()
+     def mock_raw_data(self, helpers):
+         """

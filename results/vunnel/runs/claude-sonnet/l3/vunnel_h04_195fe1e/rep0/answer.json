@@ -1,0 +1,1 @@
+{"summary": "The alma parser now adds database_specific.anchore.fixes (version, UTC published date, kind advisory) to every fixed range, including library clones, via an optional fixdater, context-manager support and a single download per run."}

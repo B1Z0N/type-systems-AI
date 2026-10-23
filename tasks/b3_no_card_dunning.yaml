@@ -1,0 +1,22 @@
+id: b3_no_card_dunning
+category: bugfix
+stratum: type_relevant
+title: Customers without a card never enter dunning
+read_only: false
+checker_catches_at: none
+relevant_files: [payments.py, customers.py, dunning.py]
+mutations:
+  - file: payments.py
+    find: "    if method is None:\n        record_failure(ctx, invoice, \"no_payment_method\")\n        return None\n"
+    replace: "    if method is None:\n        return None\n"
+prompt: |
+  Customers who have no payment method on file never enter dunning: their first invoice
+  stays open forever, no retry is ever scheduled, no payment-failed event is emitted, and
+  the subscription stays `active`. Find the root cause and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location: {file: payments.py, function: collect}
+grader:
+  type: tests
+  target_tests:
+    - base/test_dunning_refunds.py::test_customer_without_card_enters_dunning

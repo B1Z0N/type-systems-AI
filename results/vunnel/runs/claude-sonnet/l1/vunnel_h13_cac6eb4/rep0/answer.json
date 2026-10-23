@@ -1,0 +1,1 @@
+{"summary": "Added PluginOverrideMode (FAIL/REPLACE/IGNORE, read from VUNNEL_PLUGIN_OVERRIDE_MODE) and a mode argument to register() controlling behavior on name collisions with a different class."}

@@ -1,0 +1,1 @@
+{"functions": ["api._match", "api._optional_str", "catalog.find_price", "customers.default_payment_method", "engine.BillingEngine._renew", "engine.BillingEngine.pay", "payments.collect", "store.Store.get_coupon", "store.Store.get_customer", "store.Store.get_invoice", "store.Store.get_price", "store.Store.get_subscription", "tax.lookup"]}

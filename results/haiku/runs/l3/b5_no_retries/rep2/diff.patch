@@ -1,0 +1,37 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index a7a2c70..c9ba953 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -51,7 +51,7 @@ def due_for_retry(ctx: Context, now: EpochSeconds) -> list[InvoiceId]:
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "opened"
++        if invoice["status"] == "open"
+         and invoice["next_attempt_at"] is not None
+         and invoice["next_attempt_at"] <= now
+     ]
+diff --git a/tests/test_dunning.py b/tests/test_dunning.py
+new file mode 100644
+index 0000000..adc9205
+--- /dev/null
++++ b/tests/test_dunning.py
+@@ -0,0 +1,18 @@
++def test_declined_invoice_is_retried_and_recovers(world):
++    cus = world.customer()
++    world.gateway.fail_next = ["card_declined"]
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    assert sub["status"] == "past_due"
++    world.advance_days(1)
++    assert sub["status"] == "active"
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"
++
++
++def test_repeated_declines_escalate_to_unpaid(world):
++    cus = world.customer()
++    world.gateway.fail_next = ["card_declined"] * 4
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    for _ in range(7):
++        world.advance_days(1)
++    assert sub["status"] == "unpaid"

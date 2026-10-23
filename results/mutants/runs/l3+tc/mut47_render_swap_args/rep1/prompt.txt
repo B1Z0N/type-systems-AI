@@ -1,0 +1,30 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+from billing.render import render_invoice
+
+
+def test_render_invoice(world):
+    from billing import tax
+
+    tax.set_tax_rate(world.ctx, "US-CA", 825, "CA")
+    cus = world.customer(region="US-CA")
+    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
+    [inv] = world.engine.invoices_for(cus["id"])
+    text = render_invoice(world.ctx, inv)
+    assert "Invoice INV-00001" in text
+    assert "Tax (8.25%)" in text
+    assert "$10.82" in text
+```
+
+It fails with:
+
+```
+billing.errors.ValidationError: unsupported currency: 0
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

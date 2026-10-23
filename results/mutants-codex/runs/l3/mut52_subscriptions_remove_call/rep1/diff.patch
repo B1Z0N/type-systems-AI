@@ -1,0 +1,37 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index 31b0128..e0ff3b2 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -172,7 +172,7 @@ def cancel(ctx: Context, subscription_id: SubscriptionId, *, at_period_end: bool
+             {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
+         )
+         return subscription
+-    pass
++    transition(ctx, subscription, "canceled")
+     ctx.store.pending_items.pop(subscription_id, None)
+     return subscription
+ 
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..fcbbf77 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -34,6 +34,19 @@ def test_cancel_at_period_end(world):
+     assert len(world.engine.invoices_for(cus["id"])) == 1
+ 
+ 
++def test_retries_exhausted_after_cancel_marks_uncollectible():
++    from conftest import World
++
++    w = World({"retry_offsets_days": [1], "final_action": "mark_unpaid"})
++    cus = w.customer(last4="0002")
++    sub = w.engine.subscribe(cus["id"], [(w.monthly["id"], 1)])
++    w.engine.cancel(sub["id"], at_period_end=False)
++    w.advance_days(1)
++    [inv] = w.engine.invoices_for(cus["id"])
++    assert sub["status"] == "canceled"
++    assert inv["status"] == "uncollectible"
++
++
+ def test_upgrade_prorates_on_next_invoice(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])

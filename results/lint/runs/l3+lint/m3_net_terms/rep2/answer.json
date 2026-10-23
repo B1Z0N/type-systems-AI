@@ -1,0 +1,1 @@
+{"summary": "Added a per-customer net_terms_days setting (default 7, must be non-negative) to create_customer, update_customer and POST /customers, and finalize now computes due_at from the customer's current term."}

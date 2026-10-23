@@ -1,0 +1,13 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index 8ee6e70..88e5471 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -49,7 +49,7 @@ def refund_invoice(ctx: Context, invoice_id: str, reason: str = "requested_by_cu
+         if not result["ok"]:
+             raise InvalidStateError(f"gateway refused refund for payment {payment['id']}")
+         payment["refunded_amount"] = payment["refunded_amount"] + remaining
+-        payment["ok"] = "refunded"
++        payment["status"] = "refunded"
+         refunded = refunded + remaining
+         emit(ctx, "payment.refunded", {"payment": payment_json(payment)})
+     if invoice["credit_applied"] > 0:

@@ -1,0 +1,12 @@
+diff --git a/billing/payments.py b/billing/payments.py
+index b4569df..e2f9eeb 100644
+--- a/billing/payments.py
++++ b/billing/payments.py
+@@ -16,6 +16,7 @@ def collect(ctx, invoice_id):
+         return None
+     method = default_payment_method(ctx, invoice["customer_id"])
+     if method is None:
++        record_failure(ctx, invoice, "no_payment_method")
+         return None
+     now = ctx.clock.now()
+     if is_expired(method, now):

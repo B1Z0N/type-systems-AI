@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added partial refunds across the billing engine and API, with payment balances, credit notes, validation, and tests."
+  },
+  "answer_error": null
+}

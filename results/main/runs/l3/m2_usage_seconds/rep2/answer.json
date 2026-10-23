@@ -1,0 +1,1 @@
+{"summary": "Usage records now store timestamp in epoch seconds (converted from millis on input, back to millis in the POST /usage response), with period filtering done in seconds."}

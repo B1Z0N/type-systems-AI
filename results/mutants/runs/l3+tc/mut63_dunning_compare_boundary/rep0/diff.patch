@@ -1,0 +1,32 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index f3c440e..704adec 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -25,7 +25,7 @@ def record_failure(ctx: Context, invoice: Invoice, failure_code: str) -> None:
+     subscription = (
+         ctx.store.get_subscription(invoice["subscription_id"]) if invoice["subscription_id"] is not None else None
+     )
+-    if invoice["attempt_count"] < len(offsets):
++    if invoice["attempt_count"] <= len(offsets):
+         base = invoice["finalized_at"] if invoice["finalized_at"] is not None else ctx.clock.now()
+         invoice["next_attempt_at"] = EpochSeconds(base + offsets[invoice["attempt_count"] - 1] * SECONDS_PER_DAY)
+         if subscription is not None and subscription["status"] in ("active", "trialing"):
+diff --git a/tests/test_dunning.py b/tests/test_dunning.py
+new file mode 100644
+index 0000000..93a52df
+--- /dev/null
++++ b/tests/test_dunning.py
+@@ -0,0 +1,13 @@
++
++
++def test_retries_exhausted_after_cancel_marks_uncollectible():
++    from conftest import World
++
++    w = World({"retry_offsets_days": [1], "final_action": "mark_unpaid"})
++    cus = w.customer(last4="0002")
++    sub = w.engine.subscribe(cus["id"], [(w.monthly["id"], 1)])
++    w.engine.cancel(sub["id"], at_period_end=False)
++    w.advance_days(1)
++    [inv] = w.engine.invoices_for(cus["id"])
++    assert sub["status"] == "canceled"
++    assert inv["status"] == "uncollectible"

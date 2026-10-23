@@ -1,0 +1,31 @@
+A customer-facing bug was reported. This test reproduces it: added to the test suite
+(it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+```python
+from billing import reports
+
+
+def test_mrr_and_aging(world):
+    from billing import catalog
+
+    yearly = catalog.create_price(world.ctx, world.plan["id"], "usd", "flat", unit_amount=12000, interval="year")
+    a = world.customer()
+    b = world.customer(email="b@example.com", card=False)
+    world.engine.subscribe(a["id"], [(world.monthly["id"], 3)])
+    world.engine.subscribe(b["id"], [(yearly["id"], 1)])
+    assert reports.mrr(world.ctx) == {"usd": 3000 + 1000}
+    world.clock.advance_days(40)
+    aging = reports.aging(world.ctx, world.clock.now())
+    assert aging["usd"]["31-60"] == 12000
+```
+
+It fails with:
+
+```
+AssertionError: assert {} == {'usd': 4000}
+```
+
+The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"file": "<file name inside billing/>", "function": "<function name where the bug was>"}

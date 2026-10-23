@@ -1,0 +1,14 @@
+{
+  "score": 0.75,
+  "passed": false,
+  "target_passed": 3,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [
+    "tasks/test_m2_usage_seconds.py::test_record_stored_in_seconds"
+  ],
+  "answer": {
+    "summary": "Usage records now store timestamp in epoch seconds (plus a sub-second offset so the millisecond value returned to clients is exact), with report_usage, the engine and POST /usage still taking and returning milliseconds."
+  },
+  "answer_error": null
+}

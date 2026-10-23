@@ -1,0 +1,13 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index 31b0128..e0ff3b2 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -172,7 +172,7 @@ def cancel(ctx: Context, subscription_id: SubscriptionId, *, at_period_end: bool
+             {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
+         )
+         return subscription
+-    pass
++    transition(ctx, subscription, "canceled")
+     ctx.store.pending_items.pop(subscription_id, None)
+     return subscription
+ 

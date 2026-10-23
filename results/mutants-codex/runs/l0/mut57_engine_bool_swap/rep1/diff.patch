@@ -1,0 +1,33 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index 879481e..db6df72 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -8,7 +8,7 @@ from .dunning import DEFAULT_POLICY, due_for_retry
+ class BillingEngine:
+     def __init__(self, clock, gateway, transport, dunning_policy=None, fx=None):
+         self.clock = clock
+-        self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
++        self.ctx = Context(clock, gateway, transport, dunning_policy if dunning_policy is not None else DEFAULT_POLICY, fx)
+ 
+     def subscribe(self, customer_id, items, *, trial_days=None, coupon_id=None):
+         """Create a subscription and, unless it starts with a trial, invoice the first period."""
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..d6e6790 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -13,6 +13,15 @@ def test_subscribe_invoices_and_charges_first_period(world):
+     assert format_date(sub["current_period_end"]) == "2026-02-15"
+ 
+ 
++def test_customer_without_card_enters_dunning(world):
++    cus = world.customer(card=False)
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["attempt_count"] == 1
++    assert inv["next_attempt_at"] is not None
++    assert sub["status"] == "past_due"
++
++
+ def test_trial_converts_and_invoices(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)

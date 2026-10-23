@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Customer payment terms are configurable through the customer functions and API, and invoice due dates use the current terms at finalization."
+  },
+  "answer_error": null
+}

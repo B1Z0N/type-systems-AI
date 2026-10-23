@@ -1,0 +1,62 @@
+id: mut26_dunning_remove_call
+category: bugfix
+stratum: type_neutral
+origin: mutant
+title: Random remove call mutant in dunning.py
+read_only: false
+bug_kind: remove_call
+checker_catches_at: none
+relevant_files:
+- dunning.py
+mutations:
+- file: dunning.py
+  find: |2
+        if action == "cancel":
+            mark_uncollectible(ctx, invoice["id"])
+            transition(ctx, subscription, "canceled")
+  replace: |2
+        if action == "cancel":
+            pass
+            transition(ctx, subscription, "canceled")
+prompt: |
+  A customer-facing bug was reported. This test reproduces it: added to the test suite
+  (it uses the `world` fixture from `tests/conftest.py`), it fails.
+
+  ```python
+
+
+  def test_cancel_policy_marks_uncollectible():
+      from conftest import World
+
+      w = World({"retry_offsets_days": [2], "final_action": "cancel"})
+      cus = w.customer(last4="9995")
+      sub = w.engine.subscribe(cus["id"], [(w.monthly["id"], 1)])
+      w.advance_days(2)
+      [inv] = w.engine.invoices_for(cus["id"])
+      assert inv["status"] == "uncollectible"
+      assert sub["status"] == "canceled"
+  ```
+
+  It fails with:
+
+  ```
+  AssertionError: assert 'open' == 'uncollectible'
+  ```
+
+  The expectations in the test are correct. Find the root cause in the `billing` package and fix it.
+answer_schema: |
+  {"file": "<file name inside billing/>", "function": "<function name where the bug was>"}
+expected_location:
+  file: dunning.py
+  function: record_failure
+grader:
+  type: tests
+  target_tests:
+  - base/test_dunning_refunds.py::test_cancel_policy_marks_uncollectible
+mutant:
+  site: dunning.py:42
+  operator: remove_call
+  index: 3
+  hidden_failing: 1
+  mypy_errors_l3: 0
+  mypy_errors_l2: 0

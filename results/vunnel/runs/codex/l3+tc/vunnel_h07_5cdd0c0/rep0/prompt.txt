@@ -1,0 +1,11 @@
+The `wolfi` and `chainguard` providers crash with
+`TypeError: 'NoneType' object is not iterable` when a secdb `secfixes` list contains a
+vulnerability id that isn't `CVE-` or `GHSA-` prefixed, for example the Go vulnerability
+database id `GO-2026-5932`. The `minimos` provider handles the same input fine.
+
+For such ids the reference links should fall back to just the distro security page, so
+`SecDBParser.build_reference_links("GO-2026-5932")` returns
+`[f"{parser.security_reference_url}/GO-2026-5932"]`, while CVE ids keep their current links.
+
+When you are done, also write `answer.json` in the repository root with this shape:
+{"summary": "<one sentence>"}

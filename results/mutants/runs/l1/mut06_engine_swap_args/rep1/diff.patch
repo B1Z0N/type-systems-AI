@@ -1,0 +1,28 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index a97dc46..6f4272b 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -99,7 +99,7 @@ class BillingEngine:
+         return payments.collect(self.ctx, invoice_id)
+ 
+     def refund(self, invoice_id: str, reason: str = "requested_by_customer") -> dict:
+-        return refunds.refund_invoice(invoice_id, self.ctx, reason)
++        return refunds.refund_invoice(self.ctx, invoice_id, reason)
+ 
+     def invoices_for(self, customer_id: str) -> list:
+         return sorted(self.ctx.store.invoices_for(customer_id), key=lambda inv: (inv["created_at"], inv["id"]))
+diff --git a/tests/test_reports_refund.py b/tests/test_reports_refund.py
+new file mode 100644
+index 0000000..d420cf5
+--- /dev/null
++++ b/tests/test_reports_refund.py
+@@ -0,0 +1,9 @@
++from billing import reports
++
++
++def test_revenue_between_nets_credit_notes(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    world.engine.refund(inv["id"])
++    assert reports.revenue_between(world.ctx, inv["paid_at"], inv["paid_at"] + 1) == {"usd": 0}

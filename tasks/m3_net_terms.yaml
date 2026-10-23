@@ -1,0 +1,18 @@
+id: m3_net_terms
+category: change
+stratum: type_neutral
+title: Per-customer payment terms
+read_only: false
+relevant_files: [customers.py, invoices.py, api.py, models.py, reports.py]
+prompt: |
+  Invoices are currently always due 7 days after finalization. Make this configurable per
+  customer: add a `net_terms_days` setting (integer, default 7) that can be passed to
+  `customers.create_customer(..., net_terms_days=...)`, changed with
+  `customers.update_customer(..., net_terms_days=...)`, and given in the `POST /customers`
+  API body as `net_terms_days`. A negative value must raise `ValidationError` (HTTP 400 from
+  the API). When an invoice is finalized, its `due_at` must use the customer's current term.
+answer_schema: |
+  {"summary": "<one sentence>"}
+grader:
+  type: tests
+  task_tests: [tasks/test_m3_net_terms.py]

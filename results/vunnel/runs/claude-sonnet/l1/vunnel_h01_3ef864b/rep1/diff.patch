@@ -1,0 +1,183 @@
+diff --git a/src/vunnel/cli/config.py b/src/vunnel/cli/config.py
+index f7ab4ef..a4b1952 100644
+--- a/src/vunnel/cli/config.py
++++ b/src/vunnel/cli/config.py
+@@ -7,6 +7,7 @@ from typing import Union, get_args, get_origin, get_type_hints
+ 
+ import mergedeep
+ import yaml
++from mashumaro.exceptions import InvalidFieldValue
+ from mashumaro.mixins.dict import DataClassDictMixin
+ 
+ from vunnel import provider, providers
+@@ -202,13 +203,14 @@ def apply_env_overrides(obj, prefix: str = "VUNNEL") -> None:
+                 # default to string assignment
+                 coerced_value = env_value
+ 
+-            setattr(obj, f.name, coerced_value)
+-            logging.debug("config override: %s=%s", env_name, env_value)
+-
+         except ValueError as e:
+             type_name = field_type.__name__ if field_type else "unknown"
+             raise ValueError(f"invalid value for {env_name}: {env_value!r} (expected {type_name})") from e
+ 
++        # assignment may validate (e.g. map-typed options), let those errors through unchanged
++        setattr(obj, f.name, coerced_value)
++        logging.debug("config override: %s=%s", env_name, env_value)
++
+ 
+ def load(path: str = ".vunnel.yaml") -> Application:
+     try:
+@@ -223,7 +225,16 @@ def load(path: str = ".vunnel.yaml") -> Application:
+             instance = Application().to_dict()
+ 
+             mergedeep.merge(instance, app_object)
+-            cfg = Application.from_dict(instance)
++            try:
++                cfg = Application.from_dict(instance)
++            except InvalidFieldValue as e:
++                # surface the validation error itself instead of mashumaro's dump of the whole field value
++                root: BaseException = e
++                while (root.__cause__ or root.__context__) is not None:
++                    root = root.__cause__ or root.__context__
++                if root is e:
++                    raise
++                raise root from None
+             if cfg is None:
+                 raise FileNotFoundError("parsed empty config")
+     except FileNotFoundError:
+diff --git a/src/vunnel/providers/chainguard_libraries/__init__.py b/src/vunnel/providers/chainguard_libraries/__init__.py
+index 290f7ed..0d2b9b6 100644
+--- a/src/vunnel/providers/chainguard_libraries/__init__.py
++++ b/src/vunnel/providers/chainguard_libraries/__init__.py
+@@ -7,7 +7,7 @@ from importlib import metadata
+ from vunnel import provider, result, schema
+ from vunnel.utils import timer
+ 
+-from .openvex_parser import OpenVEXParser
++from .openvex_parser import DEFAULT_VERSION_MARKERS, OpenVEXParser, normalize_version_markers
+ 
+ 
+ def _default_user_agent() -> str:
+@@ -29,6 +29,16 @@ class Config:
+     )
+     request_timeout: int = 125
+     openvex_url: str = "https://libraries.cgr.dev/openvex/v1/all.json"
++    version_markers: dict[str, str | None] = field(default_factory=lambda: DEFAULT_VERSION_MARKERS.copy())
++
++    def __post_init__(self) -> None:
++        self.version_markers = normalize_version_markers(self.version_markers)
++
++    def __setattr__(self, name: str, value: object) -> None:
++        # also validate on later assignment (e.g. environment variable overrides)
++        if name == "version_markers":
++            value = normalize_version_markers(value)
++        super().__setattr__(name, value)
+ 
+ 
+ class Provider(provider.Provider):
+@@ -50,6 +60,7 @@ class Provider(provider.Provider):
+             download_timeout=self.config.request_timeout,
+             logger=self.logger,
+             user_agent=self.runtime_cfg.user_agent,
++            version_markers=self.config.version_markers,
+         )
+ 
+         # this provider requires the previous state from former runs
+diff --git a/src/vunnel/providers/chainguard_libraries/openvex_parser.py b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+index 548222c..9d968e6 100644
+--- a/src/vunnel/providers/chainguard_libraries/openvex_parser.py
++++ b/src/vunnel/providers/chainguard_libraries/openvex_parser.py
+@@ -12,6 +12,21 @@ from vunnel.utils import date, vulnerability
+ from vunnel.utils import http_wrapper as http
+ 
+ 
++DEFAULT_VERSION_MARKERS: dict[str, str] = {"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}
++
++
++def normalize_version_markers(markers: object) -> dict[str, str]:
++    """
++    Validate a purl type -> version marker map. Entries with a null marker are dropped (ecosystem disabled).
++    """
++    if not isinstance(markers, dict):
++        raise ValueError(f"version_markers must be a map of purl type to version marker, got {type(markers).__name__}")
++    empty = sorted(str(k) for k, v in markers.items() if v is not None and v == "")
++    if empty:
++        raise ValueError(f"empty version marker for {empty}")
++    return {k: v for k, v in markers.items() if v is not None}
++
++
+ class OpenVEXParser:
+     _openvex_dir_ = "openvex"
+     _security_reference_url_ = "https://images.chainguard.dev/security"
+@@ -26,6 +41,7 @@ class OpenVEXParser:
+         logger: logging.Logger = None,
+         security_reference_url: str = None,
+         user_agent: str = None,
++        version_markers: dict[str, str] | None = None,
+     ):
+         """
+         :param workspace.Workspace workspace: workspace to use for downloads and storage
+@@ -35,11 +51,15 @@ class OpenVEXParser:
+         :param logging.Logger logger:
+         :type string security_reference_url: location for security information
+         :param str user_agent: User-Agent header for HTTP requests
++        :param dict version_markers: purl type -> marker a Chainguard-built version must contain
+         """
+         self.download_timeout = download_timeout
+         self.namespace = namespace
+         self.workspace = workspace
+         self.user_agent = user_agent
++        self.version_markers = normalize_version_markers(
++            DEFAULT_VERSION_MARKERS if version_markers is None else version_markers
++        )
+ 
+         if not fixdater:
+             fixdater = fixdate.default_finder(workspace)
+@@ -228,7 +248,7 @@ class OpenVEXParser:
+         :param statement: [openvex statement](https://github.com/openvex/spec/blob/main/OPENVEX-SPEC.md)
+         :return: statement with only chainguard products
+         """
+-        d = {"pypi": "+cgr.", "maven": ".cgr."}
++        d = self.version_markers
+         new_products = []
+         for product in statement.get("products", []):
+             pid = self._get_purl(product)
+diff --git a/tests/unit/cli/test_cli.py b/tests/unit/cli/test_cli.py
+index 63ac1d2..333d718 100644
+--- a/tests/unit/cli/test_cli.py
++++ b/tests/unit/cli/test_cli.py
+@@ -304,6 +304,11 @@ providers:
+       skip_download: false
+       skip_newer_archive_check: false
+       user_agent: anchore/vunnel-$VUNNEL_VERSION
++    version_markers:
++      golang: -cgr.
++      maven: .cgr.
++      npm: -cgr.
++      pypi: +cgr.
+   common:
+     import_results:
+       enabled: false
+diff --git a/tests/unit/providers/chainguard_libraries/test_provider.py b/tests/unit/providers/chainguard_libraries/test_provider.py
+index a814d8c..5488e15 100644
+--- a/tests/unit/providers/chainguard_libraries/test_provider.py
++++ b/tests/unit/providers/chainguard_libraries/test_provider.py
+@@ -25,3 +25,17 @@ def test_provider_via_snapshot(helpers, disable_get_requests, monkeypatch, auto_
+     p.update(None)
+ 
+     workspace.assert_result_snapshots()
++
++
++def test_version_markers_defaults_and_null_disable():
++    assert Config().version_markers == {"pypi": "+cgr.", "maven": ".cgr.", "npm": "-cgr.", "golang": "-cgr."}
++    assert "npm" not in Config(version_markers={"npm": None, "pypi": "+cgr."}).version_markers
++
++
++def test_version_markers_validation():
++    import pytest
++
++    with pytest.raises(ValueError, match=r"empty version marker for \['npm'\]"):
++        Config(version_markers={"npm": ""})
++    with pytest.raises(ValueError, match="version_markers must be a map"):
++        Config().version_markers = "npm"

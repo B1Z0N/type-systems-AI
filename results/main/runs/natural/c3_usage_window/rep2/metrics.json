@@ -1,0 +1,123 @@
+{
+  "completed": true,
+  "stop_reason": "success",
+  "turns": 5,
+  "duration_ms": 12344,
+  "api_duration_ms": 12086,
+  "cost_usd": 0.0570363,
+  "input_tokens": 10,
+  "output_tokens": 997,
+  "cache_read_tokens": 51863,
+  "cache_write_tokens": 10465,
+  "models": [
+    "claude-sonnet-5-5"
+  ],
+  "total_input_tokens": 62338,
+  "tool_calls": 4,
+  "tool_calls_by_kind": {
+    "read": 3,
+    "answer": 1
+  },
+  "reads": 3,
+  "searches": 0,
+  "edits": 0,
+  "test_runs": 0,
+  "typecheck_runs": 0,
+  "script_runs": 0,
+  "tool_errors": 0,
+  "subagent_calls": 0,
+  "files_read": [
+    "api.py",
+    "clock.py",
+    "invoices.py",
+    "usage.py"
+  ],
+  "files_edited": [],
+  "unique_files_edited": 0,
+  "unique_files_read": 4,
+  "rereads": 0,
+  "read_chars": 16219,
+  "search_chars": 0,
+  "tool_output_chars": 16334,
+  "relevant_files_read": 4,
+  "exploration_precision": 1.0,
+  "exploration_recall": 0.8,
+  "steps_before_first_edit": null,
+  "final_message": "I've written `answer.json`. I read the code and didn't run the tests.\n\n1. **Unit:** milliseconds. `report_usage` in `billing/usage.py` takes `timestamp` as epoch milliseconds, and the API handler in `billing/api.py` says the same. If you omit it, it defaults to now converted to milliseconds. Billing periods are in epoch seconds and are converted to milliseconds internally.\n2. **Boundaries:** a record exactly at the period start is counted, and one exactly at the period end is not. `records_in_period` filters with `start_ms <= timestamp < end_ms`, so the period is half-open.\n3. **Timing:** in arrears. `subscription_lines` in `billing/invoices.py` bills licensed items in advance and metered items for the previous `usage_period`. It skips metered items entirely on the first invoice.\n\n```json\n{\"timestamp_unit\": \"milliseconds\", \"start_inclusive\": true, \"end_inclusive\": false, \"billing_timing\": \"in_arrears\"}\n```",
+  "steps": [
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [],
+      "read_paths": [],
+      "kinds": [
+        "read",
+        "search",
+        "vcs"
+      ],
+      "command": "git ls-files && grep -rniE \"timestamp|usage\" --include=*.py . --exclude-dir=.venv --exclude-dir=tests | head -80",
+      "output_chars": 828,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/usage.py"
+      ],
+      "read_paths": [
+        "billing/usage.py"
+      ],
+      "kinds": [
+        "read",
+        "search"
+      ],
+      "command": "cat billing/usage.py; grep -rniE \"usage|metered\" billing README.md | grep -v \"^billing/usage.py\" | head -50",
+      "output_chars": 7859,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "read",
+      "tool": "Bash",
+      "paths": [
+        "billing/clock.py",
+        "billing/api.py",
+        "billing/invoices.py"
+      ],
+      "read_paths": [
+        "billing/clock.py",
+        "billing/api.py",
+        "billing/invoices.py"
+      ],
+      "kinds": [
+        "read"
+      ],
+      "command": "cat billing/clock.py; sed -n 60,110p billing/api.py; sed -n 70,110p billing/invoices.py",
+      "output_chars": 7532,
+      "error": false,
+      "subagent": false
+    },
+    {
+      "kind": "answer",
+      "tool": "Bash",
+      "paths": [
+        "answer.json",
+        "answer.json"
+      ],
+      "read_paths": [],
+      "kinds": [
+        "other",
+        "read"
+      ],
+      "command": "echo '{\"timestamp_unit\": \"milliseconds\", \"start_inclusive\": true, \"end_inclusive\": false, \"billing_timing\": \"in_arrears\"}' > answer.json && cat answer.json",
+      "output_chars": 115,
+      "error": false,
+      "subagent": false
+    }
+  ],
+  "wall_s": 13.4,
+  "timed_out": false,
+  "exit_code": 0
+}

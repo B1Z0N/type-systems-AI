@@ -1,0 +1,102 @@
+diff --git a/billing/subscriptions.py b/billing/subscriptions.py
+index e0ff3b2..aa9556c 100644
+--- a/billing/subscriptions.py
++++ b/billing/subscriptions.py
+@@ -134,6 +134,25 @@ def create(
+     return subscription
+ 
+ 
++def extend_trial(ctx: Context, subscription_id: SubscriptionId, days: int) -> Subscription:
++    """Extend a trial and its current period by whole days."""
++    if type(days) is not int or days <= 0:
++        raise ValidationError("days must be a positive integer")
++    subscription = ctx.store.require_subscription(subscription_id)
++    trial_end = subscription["trial_end"]
++    if subscription["status"] != "trialing" or trial_end is None:
++        raise InvalidStateError("subscription is not trialing")
++    extension = days * SECONDS_PER_DAY
++    subscription["trial_end"] = EpochSeconds(trial_end + extension)
++    subscription["current_period_end"] = EpochSeconds(subscription["current_period_end"] + extension)
++    emit(
++        ctx,
++        "subscription.updated",
++        {"subscription": subscription_json(subscription), "previous_status": subscription["status"]},
++    )
++    return subscription
++
++
+ def change_items(
+     ctx: Context, subscription_id: SubscriptionId, items: list[tuple[PriceId, int]], *, prorate: bool = True
+ ) -> Subscription:
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..d7b1187 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -1,5 +1,10 @@
+-from billing import ledger
++import pytest
++
++from billing import ledger, subscriptions
+ from billing.clock import format_date
++from billing.errors import InvalidStateError, ValidationError
++from billing.events import events_of_type
++from billing.models import SECONDS_PER_DAY
+ 
+ 
+ def test_subscribe_invoices_and_charges_first_period(world):
+@@ -24,6 +29,55 @@ def test_trial_converts_and_invoices(world):
+     assert inv["total"] == 1000
+ 
+ 
++def test_extend_trial_delays_billing_and_emits_update(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    original_end = sub["trial_end"]
++
++    result = subscriptions.extend_trial(world.ctx, sub["id"], 3)
++
++    assert result is sub
++    assert sub["trial_end"] == original_end + 3 * SECONDS_PER_DAY
++    assert sub["current_period_end"] == sub["trial_end"]
++    [event] = events_of_type(world.ctx, "subscription.updated")
++    assert event["payload"]["subscription"]["current_period_end"] == sub["current_period_end"]
++    assert event["payload"]["previous_status"] == "trialing"
++
++    world.advance_days(14)
++    assert sub["status"] == "trialing"
++    assert world.engine.invoices_for(cus["id"]) == []
++    world.advance_days(3)
++    assert sub["status"] == "active"
++    [invoice] = world.engine.invoices_for(cus["id"])
++    assert invoice["total"] == 1000
++
++
++@pytest.mark.parametrize("days", [0, -1, 1.5, "2", True, None])
++def test_extend_trial_rejects_non_positive_integer_days(world, days):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)], trial_days=14)
++    original_end = sub["trial_end"]
++
++    with pytest.raises(ValidationError):
++        subscriptions.extend_trial(world.ctx, sub["id"], days)
++
++    assert sub["trial_end"] == original_end
++    assert sub["current_period_end"] == original_end
++    assert events_of_type(world.ctx, "subscription.updated") == []
++
++
++def test_extend_trial_rejects_non_trialing_subscription(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    original_end = sub["current_period_end"]
++
++    with pytest.raises(InvalidStateError):
++        subscriptions.extend_trial(world.ctx, sub["id"], 3)
++
++    assert sub["current_period_end"] == original_end
++    assert events_of_type(world.ctx, "subscription.updated") == []
++
++
+ def test_cancel_at_period_end(world):
+     cus = world.customer()
+     sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])

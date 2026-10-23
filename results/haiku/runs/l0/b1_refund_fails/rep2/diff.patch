@@ -1,0 +1,33 @@
+diff --git a/billing/refunds.py b/billing/refunds.py
+index 9866d4c..1217a75 100644
+--- a/billing/refunds.py
++++ b/billing/refunds.py
+@@ -38,7 +38,7 @@ def refund_invoice(ctx, invoice_id, reason="requested_by_customer"):
+         raise InvalidStateError("only paid invoices can be refunded")
+     if credited_total(ctx, invoice_id) > 0:
+         raise InvalidStateError("invoice has already been refunded or credited")
+-    payments = successful_payments(ctx, invoice["customer_id"])
++    payments = successful_payments(ctx, invoice_id)
+     refunded = 0
+     for payment in payments:
+         remaining = payment["amount"] - payment["refunded_amount"]
+diff --git a/tests/test_refunds.py b/tests/test_refunds.py
+new file mode 100644
+index 0000000..e134c02
+--- /dev/null
++++ b/tests/test_refunds.py
+@@ -0,0 +1,14 @@
++from billing import refunds
++
++
++def test_refund_paid_invoice_returns_charged_amount(world):
++    cus = world.customer()
++    world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "paid"
++    note = refunds.refund_invoice(world.ctx, inv["id"])
++    assert note["amount"] == inv["total"]
++    assert note["refunded"] is True
++    payments = world.ctx.store.payments_for_invoice(inv["id"])
++    assert [p["status"] for p in payments] == ["refunded"]
++    assert payments[0]["refunded_amount"] == inv["total"]

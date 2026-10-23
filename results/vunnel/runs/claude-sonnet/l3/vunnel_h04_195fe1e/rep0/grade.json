@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 3,
+  "target_total": 3,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "The alma parser now adds database_specific.anchore.fixes (version, UTC published date, kind advisory) to every fixed range, including library clones, via an optional fixdater, context-manager support and a single download per run."
+  },
+  "answer_error": null
+}

@@ -1,0 +1,1 @@
+{"summary": "Usage records now store their timestamp in epoch seconds (converted from the client-facing milliseconds at the report_usage boundary and back for the POST /usage response), with period filtering done directly in seconds, and tests added for the unit boundary and half-open period bounds."}

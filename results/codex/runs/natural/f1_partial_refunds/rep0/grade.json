@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 6,
+  "target_total": 6,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Added partial invoice refunds across the service, engine, and API with payment tracking, credit notes, validation, and tests."
+  },
+  "answer_error": null
+}

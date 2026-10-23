@@ -1,0 +1,56 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index da11eab..c60e6f5 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -61,7 +61,7 @@ def due_for_retry(ctx, now):
+     due_invoices = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "opened"
++        if invoice["status"] == "open"
+         and invoice["next_attempt_at"] is not None
+         and invoice["next_attempt_at"] <= now
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..250dcfc 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,38 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_declined_payment_is_retried_and_subscription_recovers(world):
++    customer = world.customer()
++    world.gateway.fail_next.append("card_declined")
++    subscription = world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(customer["id"])
++
++    assert invoice["status"] == "open"
++    assert invoice["attempt_count"] == 1
++    assert subscription["status"] == "past_due"
++
++    world.advance_days(1)
++
++    assert invoice["status"] == "paid"
++    assert invoice["attempt_count"] == 1
++    assert invoice["next_attempt_at"] is None
++    assert subscription["status"] == "active"
++    assert len(world.gateway.charges) == 2
++
++
++def test_persistent_declines_exhaust_retries_and_mark_subscription_unpaid(world):
++    customer = world.customer(last4="0002")
++    subscription = world.engine.subscribe(customer["id"], [(world.monthly["id"], 1)])
++    [invoice] = world.engine.invoices_for(customer["id"])
++
++    world.advance_days(1)
++    world.advance_days(2)
++    world.advance_days(4)
++
++    assert invoice["status"] == "open"
++    assert invoice["attempt_count"] == 4
++    assert invoice["next_attempt_at"] is None
++    assert subscription["status"] == "unpaid"
++    assert len(world.gateway.charges) == 4

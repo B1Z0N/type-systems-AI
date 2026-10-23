@@ -1,0 +1,43 @@
+diff --git a/billing/dunning.py b/billing/dunning.py
+index 3ef0d16..728cf18 100644
+--- a/billing/dunning.py
++++ b/billing/dunning.py
+@@ -51,7 +51,12 @@ def due_for_retry(ctx: Context, now: EpochSeconds) -> list[InvoiceId]:
+     due = [
+         invoice
+         for invoice in ctx.store.invoices.values()
+-        if invoice["status"] == "open" or invoice["next_attempt_at"] is not None and invoice["next_attempt_at"] <= now
++        if invoice["status"] == "open"
++        and (
++            invoice["attempt_count"] == 0
++            or invoice["next_attempt_at"] is not None
++            and invoice["next_attempt_at"] <= now
++        )
+     ]
+     return [invoice["id"] for invoice in sorted(due, key=lambda inv: (inv["next_attempt_at"] or 0, inv["id"]))]
+ 
+diff --git a/tests/test_dunning_schedule.py b/tests/test_dunning_schedule.py
+new file mode 100644
+index 0000000..137de67
+--- /dev/null
++++ b/tests/test_dunning_schedule.py
+@@ -0,0 +1,19 @@
++from billing.models import Cents
++
++
++def test_declined_card_follows_retry_schedule(world):
++    cus = world.customer(last4="0002")
++    sub = world.engine.subscribe(cus["id"], [(world.monthly["id"], 1)])
++    [inv] = world.engine.invoices_for(cus["id"])
++    assert inv["status"] == "open"
++    assert inv["attempt_count"] == 1
++    charges = len(world.gateway.charges)
++    for _ in range(7):
++        world.advance_days(1)
++    assert inv["attempt_count"] == 4
++    assert len(world.gateway.charges) == charges + 3
++    assert inv["next_attempt_at"] is None
++    assert sub["status"] == "unpaid"
++    world.advance_days(30)
++    assert len(world.gateway.charges) == charges + 3
++    assert inv["attempt_count"] == 4

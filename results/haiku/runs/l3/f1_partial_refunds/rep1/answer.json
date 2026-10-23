@@ -1,0 +1,1 @@
+{"summary": "Partial refunds: refund_invoice, BillingEngine.refund and POST /invoices/{id}/refund accept an optional minor-unit amount that is refunded oldest payment first with partially_refunded/refunded statuses and one refunded credit note per call, while omitting it refunds the remainder and returns applied account credit once."}

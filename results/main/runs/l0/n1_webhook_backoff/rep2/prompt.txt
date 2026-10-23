@@ -1,0 +1,7 @@
+An endpoint always answers HTTP 500. Assume pending webhooks are delivered continuously
+(`deliver_pending` runs every second). For one event: what are the delays, in seconds,
+between consecutive delivery attempts, how many attempts are made in total, and what is
+the delivery's final status?
+
+Do not modify any files other than `answer.json`. When you are done, write your final answer as JSON to `answer.json` in the repository root, using exactly this shape:
+{"delays_seconds": [<int>, ...], "total_attempts": <int>, "final_status": "<status>"}

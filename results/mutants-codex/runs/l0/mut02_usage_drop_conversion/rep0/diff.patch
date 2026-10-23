@@ -1,0 +1,31 @@
+diff --git a/billing/usage.py b/billing/usage.py
+index 837048e..57987e0 100644
+--- a/billing/usage.py
++++ b/billing/usage.py
+@@ -33,7 +33,7 @@ def report_usage(ctx, subscription_id, price_id, quantity, timestamp=None, idemp
+ 
+ def records_in_period(ctx, subscription_id, price_id, period_start, period_end):
+     start = to_millis(period_start)
+-    end = period_end
++    end = to_millis(period_end)
+     records = [
+         record for record in ctx.store.usage_for(subscription_id, price_id) if start <= record["timestamp"] < end
+     ]
+diff --git a/tests/test_lifecycle.py b/tests/test_lifecycle.py
+index 0a2eb09..c83964f 100644
+--- a/tests/test_lifecycle.py
++++ b/tests/test_lifecycle.py
+@@ -55,3 +55,13 @@ def test_credit_applied_on_finalize(world):
+     assert inv["credit_applied"] == 700
+     assert inv["amount_paid"] == 300
+     assert ledger.balance(world.ctx, cus["id"]) == 0
++
++
++def test_usage_outside_period_not_billed(world):
++    cus = world.customer()
++    sub = world.engine.subscribe(cus["id"], [(world.api_calls["id"], 0)])
++    start_ms = sub["current_period_start"] * 1000
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 7, timestamp=start_ms - 1)
++    world.engine.report_usage(sub["id"], world.api_calls["id"], 5, timestamp=start_ms)
++    created = world.advance_days(31)
++    assert created[0]["lines"][0]["quantity"] == 5

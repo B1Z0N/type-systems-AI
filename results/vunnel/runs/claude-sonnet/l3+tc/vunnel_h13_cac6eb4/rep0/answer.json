@@ -1,0 +1,1 @@
+{"summary": "Added PluginOverrideMode (FAIL/REPLACE/IGNORE, from_env) and a mode parameter on register() controlling collision behavior."}

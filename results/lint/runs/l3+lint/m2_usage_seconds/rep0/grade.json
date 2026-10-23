@@ -1,0 +1,12 @@
+{
+  "score": 1.0,
+  "passed": true,
+  "target_passed": 4,
+  "target_total": 4,
+  "regressions": [],
+  "failed_targets": [],
+  "answer": {
+    "summary": "Usage records now store timestamp in epoch seconds (plus a millisecond remainder field), with the API/engine/usage inputs still in milliseconds and the API response converted back, leaving billing unchanged."
+  },
+  "answer_error": null
+}

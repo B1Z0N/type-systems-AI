@@ -1,0 +1,13 @@
+diff --git a/billing/engine.py b/billing/engine.py
+index 32f7584..f71a76a 100644
+--- a/billing/engine.py
++++ b/billing/engine.py
+@@ -34,7 +34,7 @@ class BillingEngine:
+         fx: RateTable | None = None,
+     ) -> None:
+         self.clock = clock
+-        self.ctx = Context(clock, gateway, transport, dunning_policy and DEFAULT_POLICY, fx)
++        self.ctx = Context(clock, gateway, transport, dunning_policy or DEFAULT_POLICY, fx)
+ 
+     def subscribe(
+         self,
