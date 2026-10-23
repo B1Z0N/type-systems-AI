@@ -1,3 +1,5 @@
+> This repo serves as an experiment fully described in [one of my blogposts](http://localhost:4321/blog/type-hints-and-coding-agents/).
+
 # Do type annotations help an AI coding agent?
 
 Coding agents (Claude Code with Sonnet and Haiku, and Codex) get the same tasks on several versions
